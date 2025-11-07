@@ -8,15 +8,44 @@ interface Location {
   city: string
   country: string
   flag: string
-  coordinates: [number, number] // [longitude, latitude]
+  coordinates: [number, number] // [longitude, latitude] - adjusted for pin positioning
+  originalCoordinates: [number, number] // [longitude, latitude] - actual location for Google Maps
   address: string
   postalCode: string
   region: string
   email: string
+  googleMapsUrl?: string // Optional Google Maps URL
 }
 
 // Flag component matching the provided circular flag designs
 const FlagIcon = ({ countryCode, size = 'normal' }: { countryCode: string; size?: 'small' | 'normal' | 'large' }) => {
+  const sizeClasses = {
+    small: 'w-6 h-6',
+    normal: 'w-10 h-10',
+    large: 'w-14 h-14'
+  };
+  
+  // UAE flag has a special layout: red vertical bar on left, then horizontal stripes
+  if (countryCode === 'AE') {
+    return (
+      <div 
+        className={`${sizeClasses[size]} rounded-full shadow-md overflow-hidden border border-gray-200 relative`}
+        title={countryCode}
+      >
+        <div className="w-full h-full flex">
+          {/* Red vertical bar on the left (1/4 width) */}
+          <div className="w-1/4 bg-red-600"></div>
+          {/* Three horizontal stripes on the right (3/4 width) */}
+          <div className="w-3/4 flex flex-col">
+            <div className="flex-1 bg-green-600"></div>
+            <div className="flex-1 bg-white"></div>
+            <div className="flex-1 bg-black"></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  
   const flagStyles: { [key: string]: { stripes: string[] } } = {
     'AT': { 
       stripes: ['bg-red-500', 'bg-white', 'bg-red-500'] 
@@ -24,18 +53,9 @@ const FlagIcon = ({ countryCode, size = 'normal' }: { countryCode: string; size?
     'DE': { 
       stripes: ['bg-black', 'bg-red-500', 'bg-yellow-400'] 
     }, // Germany - Black, Red, Yellow
-    'AE': { 
-      stripes: ['bg-green-600', 'bg-white', 'bg-black'] 
-    }, // UAE - Green, White, Black (vertical red stripe would be complex, using horizontal for now)
     'NL': { 
       stripes: ['bg-red-500', 'bg-white', 'bg-blue-600'] 
     }, // Netherlands - Red, White, Blue
-  };
-  
-  const sizeClasses = {
-    small: 'w-6 h-6',
-    normal: 'w-10 h-10',
-    large: 'w-14 h-14'
   };
   
   const flag = flagStyles[countryCode] || { stripes: ['bg-gray-300'] };
@@ -60,18 +80,22 @@ const locations: Location[] = [
     city: "Vienna",
     country: "Austria",
     flag: "🇦🇹",
-    coordinates: [16.3738, 48.2082],
+    // Pin shifted 15px up (north) - offset south by ~0.35 degrees total
+    coordinates: [16.3738, 47.8582],
+    originalCoordinates: [16.3738, 48.2082],
     address: "Mariahilfer Straße 101/3/48-49, 1060 Vienna",
     postalCode: "1060",
     region: "Vienna",
     email: "office@fulcrum.at",
+    googleMapsUrl: "https://maps.app.goo.gl/Ui5x2fcBZ2kst1fr6",
   },
   {
     id: "linz",
     city: "Linz",
     country: "Austria",
     flag: "🇦🇹",
-    coordinates: [14.2858, 48.3069],
+    coordinates: [14.2858, 47.9569],
+    originalCoordinates: [14.2858, 48.3069],
     address: "Peter-Behrens-Platz 10, 2nd floor, 4010 Linz",
     postalCode: "4010",
     region: "Upper Austria",
@@ -82,33 +106,39 @@ const locations: Location[] = [
     city: "Munich",
     country: "Germany",
     flag: "🇩🇪",
-    coordinates: [11.582, 48.1351],
+    coordinates: [11.582, 47.7851],
+    originalCoordinates: [11.582, 48.1351],
     address: "Rundfunkplatz 2, 80335 Munich",
     postalCode: "80335",
     region: "Bavaria",
     email: "office@fulcrum.de",
+    googleMapsUrl: "https://maps.app.goo.gl/UB8HzKvxSw4nL6Mx5",
   },
   {
     id: "dubai",
     city: "Dubai",
     country: "UAE",
     flag: "🇦🇪",
-    coordinates: [55.2708, 25.2048],
+    coordinates: [55.2708, 24.8548],
+    originalCoordinates: [55.2708, 25.2048],
     address: "Boulevard Plaza Tower 2, Downtown Dubai",
     postalCode: "00000",
     region: "Dubai Emirate",
     email: "office@fulcrum-consulting.ae",
+    googleMapsUrl: "https://maps.app.goo.gl/kMgS2hRBD7TAuXyc6",
   },
   {
     id: "amstelveen",
     city: "Amstelveen",
     country: "Netherlands",
     flag: "🇳🇱",
-    coordinates: [4.8647, 52.3078],
+    coordinates: [4.8647, 51.9578],
+    originalCoordinates: [4.8647, 52.3078],
     address: "B.V. Prof. W.H. Keesomlaan 12, 1183 DJ Amstelveen",
     postalCode: "1183 DJ",
     region: "North Holland",
     email: "office@fulcrum-consulting.nl",
+    googleMapsUrl: "https://maps.app.goo.gl/AHijch2RS2SJRfW6A",
   },
 ]
 
@@ -122,6 +152,16 @@ const countryMapping: { [key: string]: string[] } = {
   Netherlands: ["amstelveen"],
 }
 
+// Map of geography country names to our country names for better matching
+const countryNameMap: { [key: string]: string } = {
+  "Austria": "Austria",
+  "Germany": "Germany",
+  "United Arab Emirates": "United Arab Emirates",
+  "U.A.E.": "United Arab Emirates",
+  "UAE": "United Arab Emirates",
+  "Netherlands": "Netherlands",
+}
+
 const getSelectedCountry = (selectedLocationId: string | null): string | null => {
   if (!selectedLocationId) return null
 
@@ -131,6 +171,23 @@ const getSelectedCountry = (selectedLocationId: string | null): string | null =>
     }
   }
   return null
+}
+
+// Helper function to check if a geography country matches our selected country
+const matchesSelectedCountry = (geoCountryName: string, selectedCountry: string | null): boolean => {
+  if (!selectedCountry) return false
+  
+  // Direct match
+  if (geoCountryName === selectedCountry) return true
+  
+  // Check mapped names
+  const mappedName = countryNameMap[geoCountryName]
+  if (mappedName === selectedCountry) return true
+  
+  // Case-insensitive match
+  if (geoCountryName.toLowerCase() === selectedCountry.toLowerCase()) return true
+  
+  return false
 }
 
 export default function WorldMapInterface() {
@@ -254,21 +311,21 @@ export default function WorldMapInterface() {
                     geo.properties?.NAME_EN ||
                     geo.properties?.ADMIN ||
                     ""
-                  const isSelectedCountry = selectedCountry && countryName === selectedCountry
+                  const isSelectedCountry = matchesSelectedCountry(countryName, selectedCountry)
 
                   return (
                     <Geography
                       key={geo.rsmKey}
                       geography={geo}
-                      fill={isSelectedCountry ? "#C00001" : "#BCBCBC"}
-                      stroke="#3e4143"
-                      strokeWidth={0.5}
+                      fill={isSelectedCountry ? "#C00000" : "#BCBCBC"}
+                      stroke={isSelectedCountry ? "#C00000" : "#3e4143"}
+                      strokeWidth={isSelectedCountry ? 1 : 0.5}
                       className="transition-all duration-500 ease-out"
                       style={{
                         default: { outline: "none" },
                         hover: {
                           outline: "none",
-                          fill: "#C00000",
+                          fill: isSelectedCountry ? "#C00000" : "#C00000",
                           stroke: "#C00000",
                           strokeWidth: 0.8,
                           transform: "scale(1.02)",
@@ -289,10 +346,10 @@ export default function WorldMapInterface() {
                     <g>
                       <g>
                         <rect
-                          x={-180}
+                          x={-110}
                           y={-170}
-                          width={360}
-                          height={150}
+                          width={220}
+                          height={100}
                           fill="white"
                           rx={18}
                           ry={18}
@@ -301,43 +358,24 @@ export default function WorldMapInterface() {
                           filter="url(#addressBoxShadow)"
                         />
 
-                        <rect x={-175} y={-168} width={350} height={3} fill="#C00000" rx={12} />
+                        <rect x={-105} y={-168} width={210} height={3} fill="#C00000" rx={12} />
 
-                        <foreignObject x={-165} y={-155} width="40" height="40">
-                          <div className="w-10 h-10 flex items-center justify-center">
-                            <FlagIcon 
-                              countryCode={location.country === 'Austria' ? 'AT' : 
-                                          location.country === 'Germany' ? 'DE' : 
-                                          location.country === 'UAE' ? 'AE' : 
-                                          location.country === 'Netherlands' ? 'NL' : 'XX'} 
-                              size="normal"
-                            />
-                          </div>
-                        </foreignObject>
-
-                        <text
-                          x={-115}
-                          y={-142}
-                          textAnchor="start"
-                          className="fill-gray-900 font-bold"
-                          style={{ fontSize: "18px" }}
-                        >
-                          {location.city}
-                        </text>
-
-                        <text
-                          x={-115}
-                          y={-125}
-                          textAnchor="start"
-                          className="fill-gray-500 font-medium"
-                          style={{ fontSize: "14px" }}
-                        >
-                          {location.country}
-                        </text>
-
-                        <foreignObject x={-115} y={-108} width="280" height="75">
+                        <foreignObject x={-100} y={-155} width="200" height="75">
                           <div className="text-sm text-gray-700 leading-tight">
-                            <div className="mb-2">{location.address}</div>
+                            <div className="mb-2">
+                              {location.googleMapsUrl ? (
+                                <a 
+                                  href={location.googleMapsUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-gray-700 hover:text-red-500 underline"
+                                >
+                                  {location.address}
+                                </a>
+                              ) : (
+                                <span className="text-gray-700">{location.address}</span>
+                              )}
+                            </div>
                             <div>
                               <a href={`mailto:${location.email}`} className="text-sm font-medium text-gray-900 hover:text-red-500">
                                 {location.email}
@@ -347,7 +385,7 @@ export default function WorldMapInterface() {
                         </foreignObject>
 
                         <text
-                          x={-115}
+                          x={-100}
                           y={-28}
                           textAnchor="start"
                           className="fill-gray-400 font-medium"
@@ -371,7 +409,7 @@ export default function WorldMapInterface() {
                   )}
 
                   {/* Polished 3D Teardrop Pin */}
-                  <g>
+                  <g transform="translate(0, -20)">
                     {/* Soft ground shadow */}
                     <ellipse
                       cx={0}
@@ -442,6 +480,69 @@ export default function WorldMapInterface() {
                       stroke="#BCBCBC"
                       strokeWidth={1}
                     />
+                  </g>
+
+                  {/* Info Box Below Pin */}
+                  <g>
+                    <g>
+                      <polygon
+                        points="0,10 -12,13 12,13"
+                        fill="white"
+                        stroke="#e5e7eb"
+                        strokeWidth={1.5}
+                        filter="url(#addressBoxShadow)"
+                      />
+                      <polygon points="0,12 -10,15 10,15" fill="#BCBCBC" />
+                    </g>
+
+                    <g>
+                      <rect
+                        x={-90}
+                        y={15}
+                        width={180}
+                        height={80}
+                        fill="white"
+                        rx={18}
+                        ry={18}
+                        stroke="#e5e7eb"
+                        strokeWidth={1.5}
+                        filter="url(#addressBoxShadow)"
+                      />
+
+                      <rect x={-85} y={92} width={170} height={3} fill="#C00000" rx={12} />
+
+                      <foreignObject x={-80} y={30} width="40" height="40">
+                        <div className="w-10 h-10 flex items-center justify-center">
+                          <FlagIcon 
+                            countryCode={location.country === 'Austria' ? 'AT' : 
+                                        location.country === 'Germany' ? 'DE' : 
+                                        location.country === 'UAE' ? 'AE' : 
+                                        location.country === 'Netherlands' ? 'NL' : 'XX'} 
+                            size="normal"
+                          />
+                        </div>
+                      </foreignObject>
+
+                      <text
+                        x={-30}
+                        y={47}
+                        textAnchor="start"
+                        className="fill-gray-900 font-bold"
+                        style={{ fontSize: "18px" }}
+                      >
+                        {location.city}
+                      </text>
+
+                      <text
+                        x={-30}
+                        y={65}
+                        textAnchor="start"
+                        className="fill-gray-500 font-medium"
+                        style={{ fontSize: "14px" }}
+                      >
+                        {location.country}
+                      </text>
+                    </g>
                   </g>
 
                   {animatingLocation === location.id && (
