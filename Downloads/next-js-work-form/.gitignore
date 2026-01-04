@@ -27,5 +27,11 @@ yarn-error.log*
 next-env.d.ts
 
 # Ignore everything in parent directories (Downloads folder)
-../
+../*
 !../next-js-work-form/
+../next-js-work-form/*
+!../next-js-work-form/**
+
+# Ignore all files outside the project directory
+/*
+!next-js-work-form/
