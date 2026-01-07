@@ -18,6 +18,7 @@ yarn-error.log*
 
 # env files
 .env*
+.env.local
 
 # vercel
 .vercel
@@ -25,7 +26,3 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
-
-# Ignore everything in parent directories (Downloads folder)
-../*
-!../next-js-work-form/
