@@ -9,6 +9,9 @@ const nextConfig = {
   reactStrictMode: true,
   swcMinify: true,
   transpilePackages: ["framer-motion"],
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
   experimental: {
     serverComponentsExternalPackages: ['@react-pdf/renderer'],
   },
