@@ -512,19 +512,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // Create pages array
       const pages = [];
       
-      // First page: Full-page image
-      pages.push(
-        React.createElement(Page, { size: "A4", style: styles.page },
-          React.createElement(View, { style: styles.fullPageImageContainer },
-            React.createElement(Image, {
-              src: "https://22527425.fs1.hubspotusercontent-na2.net/hubfs/22527425/RSM%20Kuwait%20ESG/Gemini_Generated_Image_aq4gg2aq4gg2aq4g.png",
-              style: styles.fullPageImage
-            })
-          )
-        )
-      );
-      
-      // Second Page - Header, Personal Info, and Scores
+      // First Page - Header, Personal Info, and Scores
       pages.push(
         React.createElement(Page, { size: "A4", style: styles.page },
           // Professional Letterhead Header
@@ -605,7 +593,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         )
       );
 
-      // Add questions starting from third page (first page is image, second page is header/info/score)
+      // Add questions starting from second page (first page is header/info/score)
       questionChunks.forEach((chunk, chunkIndex) => {
         const isLastChunk = chunkIndex === questionChunks.length - 1;
         

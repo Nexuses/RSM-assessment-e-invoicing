@@ -89,8 +89,11 @@ export function CybersecurityAssessmentForm() {
     position: z.string().min(2, { 
       message: "Please enter a valid position." 
     }),
-    phone: z.string().min(6, { message: "Please enter a valid contact number." }),
-    website: z.string().min(3, { message: "Please enter a website." }),
+    phone: z.union([
+      z.string().max(25, { message: "Contact number is too long." }),
+      z.literal(""),
+    ]),
+    website: z.string().min(2, { message: "Please enter a website." }),
   });
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -705,13 +708,13 @@ export function CybersecurityAssessmentForm() {
                               render={({ field }) => (
                                 <FormItem>
                                   <FormLabel className="text-sm font-semibold text-[#1b3a57]">
-                                    Contact Number <span className="text-red-500">*</span>
+                                    Contact Number
                                   </FormLabel>
                                   <FormControl>
                                     <Input
                                       {...field}
                                       type="tel"
-                                      placeholder="Enter your contact number"
+                                      placeholder="Enter your contact number (optional)"
                                       className={cn(
                                         "h-12 rounded-xl border-gray-200 bg-white text-base focus-visible:ring-2 focus-visible:ring-[#00AEEF]",
                                         form.formState.submitCount > 0 &&
@@ -735,8 +738,8 @@ export function CybersecurityAssessmentForm() {
                                   <FormControl>
                                     <Input
                                       {...field}
-                                      type="url"
-                                      placeholder="https://example.com"
+                                      type="text"
+                                      placeholder="example.com"
                                       className={cn(
                                         "h-12 rounded-xl border-gray-200 bg-white text-base focus-visible:ring-2 focus-visible:ring-[#00AEEF]",
                                         form.formState.submitCount > 0 &&
