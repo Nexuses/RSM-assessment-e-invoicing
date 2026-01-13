@@ -121,7 +121,17 @@ const createStyles = () => StyleSheet.create({
   },
   contentArea: {
     padding: 40,
-    paddingTop: 90,
+    // Keep enough space for the top-right logo, but avoid subtle overflow
+    // that can cause @react-pdf/renderer to insert an extra (often blank) page.
+    paddingTop: 70,
+    paddingBottom: 30,
+    flex: 1,
+  },
+  // Use a tighter top padding on subsequent pages to avoid occasional blank-page layout issues
+  // in @react-pdf/renderer when table blocks are close to the page height.
+  contentAreaTight: {
+    padding: 40,
+    paddingTop: 60,
     paddingBottom: 30,
     flex: 1,
   },
@@ -604,11 +614,12 @@ async function generatePDFBuffer(
     const currentDate = `${day}-${month}-${year}`;
     
     const allAnswers = Object.entries(answers);
-    const questionsPerThirdPage = 6; // For the third page (first page of questions - Assessment Details)
+    // Keep the first page comfortably within A4 height to avoid an extra blank page.
+    const questionsPerThirdPage = 5; // First page: Summary + first set of Q&As
     const questionsPerPage = 15; // For subsequent pages
     const questionChunksRaw: [string, string][][] = [];
     
-    // First chunk: 7 questions (for third page - Assessment Details)
+    // First chunk: first set of questions (rendered on the first page)
     if (allAnswers.length > 0) {
       questionChunksRaw.push(allAnswers.slice(0, questionsPerThirdPage));
     }
@@ -673,32 +684,7 @@ async function generatePDFBuffer(
       });
     };
 
-    const createLastPageImage = () => React.createElement(View, { style: styles.fullPageImageContainer },
-      React.createElement(Image, {
-        src: "https://22527425.fs1.hubspotusercontent-na2.net/hubfs/22527425/RSM-Kuwait/def_Cyber_Self_Assessment_Report%20(1).pdf%20(2).png",
-        style: styles.fullPageImage
-      })
-    );
-
     const pages = [];
-    
-    // First page: Full-page image
-    pages.push(
-      React.createElement(Page, { size: "A4", style: styles.page },
-        React.createElement(View, { style: styles.pageLogoHeader },
-          React.createElement(Image, {
-            style: styles.pageLogo,
-            src: "https://22527425.fs1.hubspotusercontent-na2.net/hubfs/22527425/RSM-Kuwait/RSM%20Logo%20-%20Color.png"
-          })
-        ),
-        React.createElement(View, { style: styles.fullPageImageContainer },
-          React.createElement(Image, {
-            src: "https://22527425.fs1.hubspotusercontent-na2.net/hubfs/22527425/RSM-Kuwait/def_Cyber_Self_Assessment_Report%20(1).pdf.png",
-            style: styles.fullPageImage
-          })
-        )
-      )
-    );
     
     // Second page: Letter format - COMMENTED OUT FOR NOW (will be added back later)
     /*
@@ -784,7 +770,7 @@ async function generatePDFBuffer(
     );
     */
 
-    // Second page: Assessment Summary and Assessment Details (Third page when letter section is enabled)
+    // First page: Assessment Summary and Assessment Details (Second page when letter section is enabled)
     const firstChunk = questionChunks[0] || [];
     const remainingChunks = questionChunks.slice(1);
     
@@ -831,7 +817,7 @@ async function generatePDFBuffer(
       )
     );
 
-    // Add remaining question pages starting from third page (first page is image, second page is summary+details; when letter section is enabled, it becomes fourth page)
+    // Add remaining question pages starting from second page (first page is summary+details; when letter section is enabled, it becomes third page)
     remainingChunks.forEach((chunk, chunkIndex) => {
       const isLastChunk = chunkIndex === remainingChunks.length - 1;
 
@@ -843,7 +829,7 @@ async function generatePDFBuffer(
               src: "https://22527425.fs1.hubspotusercontent-na2.net/hubfs/22527425/RSM-Kuwait/RSM%20Logo%20-%20Color.png"
             })
           ),
-          React.createElement(View, { style: styles.contentArea },
+          React.createElement(View, { style: styles.contentAreaTight },
             React.createElement(View, { style: styles.section },
               React.createElement(View, { 
                 style: styles.questionsTableContainerPageBreak 
@@ -862,13 +848,6 @@ async function generatePDFBuffer(
         )
       );
     });
-
-    // Add last page with only the image
-    pages.push(
-      React.createElement(Page, { size: "A4", style: styles.page },
-        createLastPageImage()
-      )
-    );
 
     return React.createElement(Document, {}, ...pages);
   };
