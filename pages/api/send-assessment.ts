@@ -3,6 +3,7 @@ import nodemailer from 'nodemailer'
 import React from 'react';
 import { Document, Page, Text, View, StyleSheet, pdf, Image } from '@react-pdf/renderer';
 import { questionsData } from '@/lib/questions';
+import { computeAssessment } from '@/lib/scoring';
 import { google } from 'googleapis';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 
@@ -13,9 +14,12 @@ interface AssessmentData {
     email: string;
     company: string;
     position: string;
+    phone?: string;
+    website?: string;
   };
   answers: Record<string, string>;
-  score: number;
+  score?: number;
+  assessment?: any;
 }
 
 interface PersonalInfo {
@@ -23,6 +27,8 @@ interface PersonalInfo {
   email: string;
   company: string;
   position: string;
+  phone?: string;
+  website?: string;
 }
 
 
@@ -584,11 +590,11 @@ const createStyles = () => StyleSheet.create({
 // Helper function to generate PDF buffer
 async function generatePDFBuffer(
   personalInfo: PersonalInfo,
-  score: number,
   answers: Record<string, string>
 ): Promise<Buffer> {
   const styles = createStyles();
   const currentQuestions = questionsData;
+  const assessment = computeAssessment(answers);
 
   const createDocument = () => {
     const date = new Date();
@@ -600,22 +606,55 @@ async function generatePDFBuffer(
     const allAnswers = Object.entries(answers);
     const questionsPerThirdPage = 6; // For the third page (first page of questions - Assessment Details)
     const questionsPerPage = 15; // For subsequent pages
-    const questionChunks: [string, string][][] = [];
+    const questionChunksRaw: [string, string][][] = [];
     
     // First chunk: 7 questions (for third page - Assessment Details)
     if (allAnswers.length > 0) {
-      questionChunks.push(allAnswers.slice(0, questionsPerThirdPage));
+      questionChunksRaw.push(allAnswers.slice(0, questionsPerThirdPage));
     }
     
     // Remaining chunks: rest of the questions
     for (let i = questionsPerThirdPage; i < allAnswers.length; i += questionsPerPage) {
-      questionChunks.push(allAnswers.slice(i, i + questionsPerPage));
+      questionChunksRaw.push(allAnswers.slice(i, i + questionsPerPage));
     }
+
+    // Defensive: never render a page for an empty chunk (can lead to a blank page in some renderers)
+    const questionChunks = questionChunksRaw.filter((chunk) => chunk.length > 0);
     
     const createQuestionRows = (answersChunk: [string, string][], isLastPage = false) => {
       return answersChunk.map(([questionId, answerValue]: [string, string], index: number) => {
         const question = currentQuestions.find((q) => q.id === questionId);
-        const answer = question?.options?.find((opt) => opt.value === answerValue);
+        let displayAnswer = '';
+
+        if (question) {
+          if (question.responseType === 'yesno' || question.responseType === 'select') {
+            const answer = question.options?.find((opt) => opt.value === answerValue);
+            displayAnswer = answer?.label || answerValue || 'Not answered';
+          } else if (question.responseType === 'multiselect') {
+            const selectedValues = (answerValue || '').split(',').map(v => v.trim()).filter(Boolean);
+            displayAnswer = selectedValues
+              .map((val) => question.options?.find((opt) => opt.value === val)?.label || val)
+              .join(', ') || 'Not answered';
+          } else if (question.responseType === 'ynlist') {
+            try {
+              const ynAnswers = JSON.parse(answerValue as string);
+              displayAnswer = Object.entries(ynAnswers)
+                .map(([key, val]) => {
+                  const option = question.options?.find(opt => opt.value === key);
+                  return `${option?.label || key}: ${val}`;
+                })
+                .join('; ') || 'Not answered';
+            } catch {
+              displayAnswer = answerValue || 'Not answered';
+            }
+          } else {
+            // text, number, etc
+            displayAnswer = answerValue || 'Not answered';
+          }
+        } else {
+          displayAnswer = answerValue || 'Not answered';
+        }
+
         const globalIndex = allAnswers.findIndex(([id]) => id === questionId);
         const isLastRow = isLastPage && index === answersChunk.length - 1;
         const rowStyle = isLastRow 
@@ -628,7 +667,7 @@ async function generatePDFBuffer(
             React.createElement(Text, { style: styles.tableCellText }, question?.text || 'Unknown question')
           ),
           React.createElement(View, { style: styles.tableCellLast },
-            React.createElement(Text, { style: styles.tableCellText }, answer?.label || 'Unknown answer')
+            React.createElement(Text, { style: styles.tableCellText }, displayAnswer)
           )
         );
       });
@@ -761,8 +800,10 @@ async function generatePDFBuffer(
           React.createElement(View, { style: styles.section },
             React.createElement(Text, { style: styles.sectionTitle }, "Assessment Summary"),
             React.createElement(View, { style: styles.scoreContainer },
-              React.createElement(Text, { style: styles.scoreLabel }, "Assessment Score"),
-              React.createElement(Text, { style: styles.scoreValue }, `${score.toString()} / 139`)
+              React.createElement(Text, { style: styles.scoreLabel }, "Total Score"),
+              React.createElement(Text, { style: styles.scoreValue }, `${assessment.totalScore.toString()}`),
+              React.createElement(Text, { style: styles.resultText }, `Axis A (Urgency): ${assessment.urgency.score} / ${assessment.maxUrgencyScore} · ${assessment.urgency.category}`),
+              React.createElement(Text, { style: styles.resultText }, `Axis B (Complexity): ${assessment.complexity.score} / ${assessment.maxComplexityScore} · ${assessment.complexity.category}`),
             )
           ),
           React.createElement(View, { style: styles.section },
@@ -817,8 +858,7 @@ async function generatePDFBuffer(
                 "Disclaimer: This is not a comprehensive E-invoicing assessment. This assessment only consists of about 15 questions to quickly assess a few key requirements of the E-invoicing framework. This assessment does not guarantee the detection of all existing or potential vulnerabilities and compliance gaps. It reflects the organization's compliance posture at the time of testing solely based on your responses to the assessment questions. The assessment report is intended solely for your internal use and must not be distributed, disclosed, or relied upon by third parties. RSM shall not be liable for any losses, damages, claims, or expenses arising from, or in connection with, the use of the assessment results."
               )
             ) : null
-          ),
-          null
+          )
         )
       );
     });
@@ -931,13 +971,19 @@ async function writeToGoogleSheets(
     const currentQuestions = questionsData;
 
     // Prepare headers
+    const assessment = computeAssessment(answers);
     const headers = [
       'Timestamp',
       'Name',
       'Email',
       'Company',
       'Position',
-      'Score',
+      'Total Score',
+      'Axis A (Urgency) Score',
+      'Axis A Category',
+      'Axis B (Complexity) Score',
+      'Axis B Category',
+      'Eligible',
       'PDF S3 Link',
       ...currentQuestions.map(q => `Q${q.id.replace('q', '')} - ${q.text.substring(0, 50)}...`),
     ];
@@ -1005,7 +1051,12 @@ async function writeToGoogleSheets(
       personalInfo.email,
       personalInfo.company,
       personalInfo.position,
-      score.toString(),
+      assessment.totalScore.toString(),
+      assessment.urgency.score.toString(),
+      assessment.urgency.category,
+      assessment.complexity.score.toString(),
+      assessment.complexity.category,
+      assessment.eligible ? 'Yes' : 'No',
       pdfS3Url || '',
       ...currentQuestions.map(q => {
         const answerValue = answers[q.id] || '';
@@ -1074,7 +1125,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ message: 'Method Not Allowed' })
   }
 
-  const { personalInfo, answers, score } = req.body as AssessmentData
+  const { personalInfo, answers } = req.body as AssessmentData
+  const assessment = computeAssessment(answers);
   const currentQuestions = questionsData;
 
   // Create a transporter using SMTP
@@ -1137,7 +1189,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             </table>
           </div>
           <div class="section">
-            <h2 class="score">Questions Completed: ${score} out of ${currentQuestions.length}</h2>
+            <h2 class="score">Total Score: ${assessment.totalScore}</h2>
+            <p style="text-align:center;margin:8px 0 0 0;">
+              <strong>Axis A (Urgency):</strong> ${assessment.urgency.score} / ${assessment.maxUrgencyScore} — ${assessment.urgency.category}<br/>
+              <strong>Axis B (Complexity):</strong> ${assessment.complexity.score} / ${assessment.maxComplexityScore} — ${assessment.complexity.category}
+            </p>
           </div>
           <div class="section">
             <table>
@@ -1213,7 +1269,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Generate PDF buffer
     console.log('Generating PDF buffer...');
-    const pdfBuffer = await generatePDFBuffer(personalInfo, score, answers);
+    const pdfBuffer = await generatePDFBuffer(personalInfo, answers);
     console.log('PDF buffer generated successfully, size:', pdfBuffer.length, 'bytes');
 
     // Upload PDF to S3
@@ -1424,7 +1480,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Write assessment data to Google Sheets
     console.log('Writing to Google Sheets...');
     try {
-      await writeToGoogleSheets(personalInfo, answers, score, pdfS3Url);
+      await writeToGoogleSheets(personalInfo, answers, assessment.totalScore, pdfS3Url);
       console.log('Google Sheets write completed');
     } catch (sheetsError) {
       console.error('Error writing to Google Sheets:', sheetsError);

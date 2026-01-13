@@ -38,6 +38,7 @@ import {
 } from "./ui/form";
 import styles from "@/styles/CybersecurityAssessmentForm.module.css";
 import { questionsData, Question } from '@/lib/questions';
+import { computeAssessment, type AssessmentResult } from "@/lib/scoring";
 
 // Add this near the top of the file, before the component
 const BLOCKED_EMAIL_DOMAINS = [
@@ -57,12 +58,14 @@ export function CybersecurityAssessmentForm() {
     email: "",
     company: "",
     position: "",
+    phone: "",
+    website: "",
   });
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [currentQuestion, setCurrentQuestion] = useState(0);
-  const [score, setScore] = useState<number | null>(null);
+  const [assessment, setAssessment] = useState<AssessmentResult | null>(null);
   const [hasStartedAssessment, setHasStartedAssessment] = useState(false);
-  const [animatedScore, setAnimatedScore] = useState(0);
+  const [animatedScore, setAnimatedScore] = useState(0); // animates TOTAL score percentage (for UI only)
   const [formErrors, setFormErrors] = useState<string[]>([]);
   const [questions] = useState<Question[]>(questionsData);
   const TOTAL_QUESTIONS = questions.length; // Total number of questions
@@ -81,11 +84,13 @@ export function CybersecurityAssessmentForm() {
       return domain && !BLOCKED_EMAIL_DOMAINS.includes(domain.toLowerCase());
     }, "Please use your business email address."),
     company: z.string().min(2, { 
-      message: "Company name cannot be empty." 
+      message: "Company legal name cannot be empty." 
     }),
     position: z.string().min(2, { 
       message: "Please enter a valid position." 
     }),
+    phone: z.string().min(6, { message: "Please enter a valid contact number." }),
+    website: z.string().min(3, { message: "Please enter a website." }),
   });
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -95,6 +100,8 @@ export function CybersecurityAssessmentForm() {
       email: "",
       company: "",
       position: "",
+      phone: "",
+      website: "",
     },
     mode: "onSubmit"
   });
@@ -173,14 +180,12 @@ export function CybersecurityAssessmentForm() {
   };
 
   const calculateScoreWithAnswers = async (finalAnswers: Record<string, string>) => {
-    // For e-invoicing assessment, we count completed questions instead of scoring
-    const completedQuestions = Object.keys(finalAnswers).length;
-    const totalScore = completedQuestions; // Use completed count as score
-    setScore(totalScore);
-    setAnimatedScore(0); // Reset animated score
-    
-    // Calculate percentage completion
-    const percentageScore = Math.round((completedQuestions / TOTAL_QUESTIONS) * 100);
+    const result = computeAssessment(finalAnswers);
+    setAssessment(result);
+    setAnimatedScore(0);
+
+    const maxTotal = result.maxUrgencyScore + result.maxComplexityScore;
+    const percentageScore = maxTotal > 0 ? Math.round((result.totalScore / maxTotal) * 100) : 0;
 
     // Animate the score
     const animationDuration = 1000; // 1 second
@@ -204,9 +209,13 @@ export function CybersecurityAssessmentForm() {
         email: personalInfo.email,
         company: personalInfo.company,
         position: personalInfo.position,
+        phone: personalInfo.phone,
+        website: personalInfo.website,
       },
       answers: finalAnswers,
-      score: totalScore,
+      // keep legacy 'score' but send full computed result as well
+      score: result.totalScore,
+      assessment: result,
     };
 
     // Send the data to the server
@@ -342,24 +351,12 @@ export function CybersecurityAssessmentForm() {
       }
     }
     
-    // For e-invoicing assessment, we count completed questions instead of scoring
-    const completedQuestions = Object.keys(finalAnswers).filter(key => {
-      const answer = finalAnswers[key];
-      // Filter out empty answers - handle different types
-      if (answer === undefined || answer === null) return false;
-      if (typeof answer === 'string') {
-        return answer.trim() !== '';
-      }
-      // For non-string answers (like numbers), consider them valid if they exist
-      return true;
-    }).length;
-    
-    const totalScore = completedQuestions; // Use completed count as score
-    setScore(totalScore);
-    setAnimatedScore(0); // Reset animated score
-    
-    // Calculate percentage completion
-    const percentageScore = Math.round((completedQuestions / TOTAL_QUESTIONS) * 100);
+    const result = computeAssessment(finalAnswers);
+    setAssessment(result);
+    setAnimatedScore(0);
+
+    const maxTotal = result.maxUrgencyScore + result.maxComplexityScore;
+    const percentageScore = maxTotal > 0 ? Math.round((result.totalScore / maxTotal) * 100) : 0;
 
     // Animate the score
     const animationDuration = 1000; // 1 second
@@ -383,9 +380,12 @@ export function CybersecurityAssessmentForm() {
         email: personalInfo.email,
         company: personalInfo.company,
         position: personalInfo.position,
+        phone: personalInfo.phone,
+        website: personalInfo.website,
       },
       answers: finalAnswers,
-      score: totalScore,
+      score: result.totalScore,
+      assessment: result,
     };
 
     // Send the data to the server
@@ -441,7 +441,7 @@ export function CybersecurityAssessmentForm() {
           ...values,
           context: {
             personalInfo,
-            score: score ?? animatedScore,
+            score: assessment?.totalScore ?? Math.round(animatedScore),
           },
         }),
       });
@@ -494,7 +494,7 @@ export function CybersecurityAssessmentForm() {
                     <div className="border-b border-gray-200 pb-4 sm:pb-6">
                       {/* <h3 className="text-base sm:text-lg font-semibold text-[#1b3a57] mb-3 sm:mb-4">Instructions</h3> */}
                       <p className="text-xs sm:text-sm text-gray-700 leading-relaxed mb-4 sm:mb-6 text-center">
-                        This e-invoicing assessment consists of various question types to gather comprehensive information about your organization&apos;s e-invoicing requirements and current setup.
+                        This assessment helps determine mandate applicability (Phase 1/Phase 2) and your implementation complexity/readiness for UAE e-invoicing.
                       </p>
                       
                       <div className="space-y-3 mb-6">
@@ -657,12 +657,12 @@ export function CybersecurityAssessmentForm() {
                               render={({ field }) => (
                                 <FormItem>
                             <FormLabel className="text-sm font-semibold text-[#1b3a57]">
-                              Company <span className="text-red-500">*</span>
+                              Company Legal Name <span className="text-red-500">*</span>
                                   </FormLabel>
                                   <FormControl>
                                     <Input
                                       {...field}
-                                placeholder="Enter your company name"
+                                placeholder="Enter your company legal name"
                                       className={cn(
                                   "h-12 rounded-xl border-gray-200 bg-white text-base focus-visible:ring-2 focus-visible:ring-[#00AEEF]",
                                   form.formState.submitCount > 0 &&
@@ -692,6 +692,56 @@ export function CybersecurityAssessmentForm() {
                                   form.formState.submitCount > 0 &&
                                     form.formState.errors.position &&
                                     "border-red-500 focus-visible:ring-red-500",
+                                      )}
+                                    />
+                                  </FormControl>
+                                  {form.formState.submitCount > 0 && <FormMessage />}
+                                </FormItem>
+                              )}
+                            />
+                            <FormField
+                              control={form.control}
+                              name="phone"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel className="text-sm font-semibold text-[#1b3a57]">
+                                    Contact Number <span className="text-red-500">*</span>
+                                  </FormLabel>
+                                  <FormControl>
+                                    <Input
+                                      {...field}
+                                      type="tel"
+                                      placeholder="Enter your contact number"
+                                      className={cn(
+                                        "h-12 rounded-xl border-gray-200 bg-white text-base focus-visible:ring-2 focus-visible:ring-[#00AEEF]",
+                                        form.formState.submitCount > 0 &&
+                                          form.formState.errors.phone &&
+                                          "border-red-500 focus-visible:ring-red-500",
+                                      )}
+                                    />
+                                  </FormControl>
+                                  {form.formState.submitCount > 0 && <FormMessage />}
+                                </FormItem>
+                              )}
+                            />
+                            <FormField
+                              control={form.control}
+                              name="website"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel className="text-sm font-semibold text-[#1b3a57]">
+                                    Website <span className="text-red-500">*</span>
+                                  </FormLabel>
+                                  <FormControl>
+                                    <Input
+                                      {...field}
+                                      type="url"
+                                      placeholder="https://example.com"
+                                      className={cn(
+                                        "h-12 rounded-xl border-gray-200 bg-white text-base focus-visible:ring-2 focus-visible:ring-[#00AEEF]",
+                                        form.formState.submitCount > 0 &&
+                                          form.formState.errors.website &&
+                                          "border-red-500 focus-visible:ring-red-500",
                                       )}
                                     />
                                   </FormControl>
@@ -743,7 +793,7 @@ export function CybersecurityAssessmentForm() {
       </section>
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 px-2 py-10 sm:px-6 lg:px-8">
         <AnimatePresence mode="wait">
-          {score === null ? (
+          {assessment === null ? (
                 <motion.div
                   key={`question-${currentQuestion}`}
               initial={{ opacity: 0, y: 20 }}
@@ -790,8 +840,8 @@ export function CybersecurityAssessmentForm() {
                                   htmlFor={id}
                                   className={cn(
                                     "flex w-full items-center gap-4 rounded-2xl border bg-white px-5 py-4 text-sm font-medium text-gray-700 shadow-sm transition-all focus:outline-none cursor-pointer",
-                                    option.value === "1" && "border border-[#3F9C35]",
-                                    option.value === "0" && "border border-[#00AEEF]",
+                                      option.value === "1" && "border border-[#3F9C35]",
+                                      option.value === "0" && "border border-[#00AEEF]",
                                     !isSelected && option.value === "1" && "hover:border-[#3F9C35] hover:shadow-lg",
                                     !isSelected && option.value === "0" && "hover:border-[#00AEEF] hover:shadow-lg",
                                     isSelected && option.value === "1" &&
@@ -906,7 +956,7 @@ export function CybersecurityAssessmentForm() {
                       );
                     } else if (currentQ.responseType === 'multiselect') {
                       // Multi-select - checkboxes
-                      const selectedValues = typeof currentAnswer === 'string' && currentAnswer ? currentAnswer.split(',') : [];
+                      const selectedValues = typeof currentAnswer === 'string' && currentAnswer ? currentAnswer.split(',').filter(Boolean) : [];
                       return (
                         <div className="space-y-3">
                           {currentQ.options?.map((option) => {
@@ -995,12 +1045,55 @@ export function CybersecurityAssessmentForm() {
                         className="mt-8 px-6 py-5 text-center"
                       >
                         <p className="text-base sm:text-lg text-gray-700 leading-relaxed">
-                          Thank you <span className="font-semibold text-[#1b3a57]">{personalInfo.name}</span> for taking time to complete the e-invoicing assessment for <span className="font-semibold text-[#1b3a57]">{personalInfo.company}</span> on <span className="font-semibold text-[#1b3a57]">{new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</span>. You have completed <span className="font-semibold text-[#1b3a57]">{score !== null ? score : Object.keys(answers).filter(key => {
-                            const answer = answers[key];
-                            return answer !== undefined && answer !== null && answer !== '' && (typeof answer !== 'string' || answer.trim() !== '');
-                          }).length}</span> out of {TOTAL_QUESTIONS} questions.
+                          Thank you <span className="font-semibold text-[#1b3a57]">{personalInfo.name}</span> for completing the e-invoicing mandate &amp; readiness assessment for <span className="font-semibold text-[#1b3a57]">{personalInfo.company}</span> on <span className="font-semibold text-[#1b3a57]">{new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</span>.
                         </p>
                       </motion.div>
+
+                      {assessment?.eligible === false && (
+                        <motion.div
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: 0.45, duration: 0.5 }}
+                          className="mt-4 px-6 py-4 text-center"
+                        >
+                          <div className="rounded-2xl border border-[#ef4444]/30 bg-gradient-to-r from-[#fff1f2] to-[#ffe4e6] px-6 py-4">
+                            <p className="text-base sm:text-lg font-semibold text-[#1b3a57] mb-2">
+                              Out of Scope for Scoring
+                            </p>
+                            <p className="text-sm sm:text-base text-gray-700">
+                              {assessment.ineligibleReason}
+                            </p>
+                          </div>
+                        </motion.div>
+                      )}
+
+                      {assessment?.eligible !== false && assessment && (
+                        <motion.div
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: 0.45, duration: 0.5 }}
+                          className="mt-4 px-6 py-4"
+                        >
+                          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                            <div className="rounded-2xl border border-[#00AEEF]/20 bg-white px-6 py-4">
+                              <p className="text-sm font-semibold text-[#1b3a57] mb-1">Axis A — Mandate Urgency</p>
+                              <p className="text-2xl font-semibold text-[#009cde]">
+                                {assessment.urgency.score} / {assessment.maxUrgencyScore}
+                              </p>
+                              <p className="mt-2 text-sm font-semibold text-[#1b3a57]">{assessment.urgency.category}</p>
+                              <p className="mt-1 text-sm text-gray-700">{assessment.urgency.recommendation}</p>
+                            </div>
+                            <div className="rounded-2xl border border-[#3F9C35]/20 bg-white px-6 py-4">
+                              <p className="text-sm font-semibold text-[#1b3a57] mb-1">Axis B — Implementation Complexity</p>
+                              <p className="text-2xl font-semibold text-[#3F9C35]">
+                                {assessment.complexity.score} / {assessment.maxComplexityScore}
+                              </p>
+                              <p className="mt-2 text-sm font-semibold text-[#1b3a57]">{assessment.complexity.category}</p>
+                              <p className="mt-1 text-sm text-gray-700">{assessment.complexity.recommendation}</p>
+                            </div>
+                          </div>
+                        </motion.div>
+                      )}
 
                       <motion.div
                         initial={{ opacity: 0, y: 10 }}
@@ -1039,7 +1132,7 @@ export function CybersecurityAssessmentForm() {
                 </motion.div>
               )}
             </AnimatePresence>
-            {score === null && (
+            {assessment === null && (
               <motion.div
             className="rounded-3xl border-2 border-[#3F9C35] bg-white/80 px-6 py-5 shadow-sm"
                 initial={{ opacity: 0, y: 20 }}

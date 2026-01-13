@@ -2,13 +2,13 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import React from 'react';
 import { Document, Page, Text, View, StyleSheet, pdf, Image } from '@react-pdf/renderer';
 import { questionsData } from '@/lib/questions';
+import { computeAssessment } from '@/lib/scoring';
 
 // Add language parameter to the request body type
 interface RequestBody {
   personalInfo: PersonalInfo;
-  score: number;
   answers: Record<string, string>;
-  questions: Question[];
+  score?: number;
 }
 
 // Add this interface at the top of the file
@@ -406,15 +406,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const { personalInfo, score, answers } = req.body as RequestBody;
+    const { personalInfo, answers } = req.body as RequestBody;
+    const assessment = computeAssessment(answers);
 
     // Validate required fields
     if (!personalInfo || !personalInfo.name || !personalInfo.email || !personalInfo.company) {
       return res.status(400).json({ message: 'Missing required personal information' });
-    }
-
-    if (score === undefined || score === null) {
-      return res.status(400).json({ message: 'Score is required' });
     }
 
     if (!answers || Object.keys(answers).length === 0) {
@@ -527,7 +524,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         )
       );
       
-      // Second Page - Header, Personal Info, and Score
+      // Second Page - Header, Personal Info, and Scores
       pages.push(
         React.createElement(Page, { size: "A4", style: styles.page },
           // Professional Letterhead Header
@@ -579,8 +576,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             React.createElement(View, { style: styles.section },
               React.createElement(Text, { style: styles.sectionTitle }, "Assessment Results"),
               React.createElement(View, { style: styles.scoreContainer },
-                React.createElement(Text, { style: styles.scoreLabel }, "Assessment Score"),
-                React.createElement(Text, { style: styles.scoreValue }, score.toString())
+                React.createElement(Text, { style: styles.scoreLabel }, "Total Score"),
+                React.createElement(Text, { style: styles.scoreValue }, assessment.totalScore.toString()),
+                React.createElement(View, { style: styles.percentageContainer },
+                  React.createElement(Text, { style: styles.percentageLabel }, "Axis A (Urgency)"),
+                  React.createElement(Text, { style: styles.percentageValue }, `${assessment.urgency.score} / ${assessment.maxUrgencyScore}`),
+                ),
+                React.createElement(View, { style: styles.percentageContainer },
+                  React.createElement(Text, { style: styles.percentageLabel }, "Axis B (Complexity)"),
+                  React.createElement(Text, { style: styles.percentageValue }, `${assessment.complexity.score} / ${assessment.maxComplexityScore}`),
+                ),
+                React.createElement(View, { style: styles.gaugeContainer },
+                  React.createElement(Text, { style: styles.resultText }, `Urgency: ${assessment.urgency.category} · Complexity: ${assessment.complexity.category}`)
+                )
               )
             ),
 
