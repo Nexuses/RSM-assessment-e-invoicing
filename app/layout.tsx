@@ -21,7 +21,7 @@ export const metadata: Metadata = {
   openGraph: {
     images: [
       {
-        url: "https://22527425.fs1.hubspotusercontent-na2.net/hubfs/22527425/RSM%20Kuwait%20ESG/Frame%204%20(1).png",
+        url: "https://22527425.fs1.hubspotusercontent-na2.net/hubfs/22527425/RSM/Frame%201171276000.png",
         width: 1920,
         height: 540,
         alt: "RSM E-invoicing Assessment Tool",
@@ -31,7 +31,7 @@ export const metadata: Metadata = {
   twitter: {
     card: "summary_large_image",
     images: [
-      "https://22527425.fs1.hubspotusercontent-na2.net/hubfs/22527425/RSM%20Kuwait%20ESG/Frame%204%20(1).png",
+      "https://22527425.fs1.hubspotusercontent-na2.net/hubfs/22527425/RSM/Frame%201171276000.png",
     ],
   },
   icons: {
