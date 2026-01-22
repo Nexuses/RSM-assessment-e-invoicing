@@ -18,8 +18,16 @@ interface ConsultationPayload {
   };
 }
 
-const spreadsheetId = process.env.GOOGLE_SHEET_ID || "18RSFaMZJYXHwelMLU8e8lCcEm7WhrSt6dasonxKKjJw";
-const sheetName = "Sheet2";
+const spreadsheetId =
+  process.env.GOOGLE_SHEETS_SPREADSHEET_ID ||
+  process.env.GOOGLE_SHEET_ID ||
+  // Default to the sheet you provided in chat
+  "17IoNsq0xAWSzJVgwnPC_Ej_eUGucW9iw6iVbvanUunE";
+
+const sheetName =
+  process.env.GOOGLE_SHEETS_CONSULTATION_SHEET_NAME ||
+  process.env.GOOGLE_SHEETS_SHEET_NAME ||
+  "Sheet2";
 
 const columnToLetter = (column: number) => {
   let temp;

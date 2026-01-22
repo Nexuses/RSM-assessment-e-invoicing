@@ -880,10 +880,22 @@ async function uploadPDFToS3(
 ): Promise<string | null> {
   try {
     // Check if S3 credentials are available
-    if (!process.env.AWS_ACCESS_KEY_ID || !process.env.AWS_SECRET_ACCESS_KEY || !process.env.AWS_S3_BUCKET_NAME || !process.env.AWS_REGION) {
-      console.error('AWS S3 credentials or bucket name not configured');
+    const hasAccessKey = !!process.env.AWS_ACCESS_KEY_ID;
+    const hasSecretKey = !!process.env.AWS_SECRET_ACCESS_KEY;
+    const hasBucket = !!process.env.AWS_S3_BUCKET_NAME;
+    const hasRegion = !!process.env.AWS_REGION;
+
+    if (!hasAccessKey || !hasSecretKey || !hasBucket || !hasRegion) {
+      console.error('AWS S3 credentials or bucket name not configured:', {
+        AWS_ACCESS_KEY_ID: hasAccessKey ? '✓ Set' : '✗ Missing',
+        AWS_SECRET_ACCESS_KEY: hasSecretKey ? '✓ Set' : '✗ Missing',
+        AWS_S3_BUCKET_NAME: hasBucket ? `✓ Set (${process.env.AWS_S3_BUCKET_NAME})` : '✗ Missing',
+        AWS_REGION: hasRegion ? `✓ Set (${process.env.AWS_REGION})` : '✗ Missing',
+      });
       return null;
     }
+
+    console.log('AWS S3: All credentials present, proceeding with upload...');
 
     // Initialize S3 client
     const s3Client = new S3Client({
@@ -908,21 +920,101 @@ async function uploadPDFToS3(
       ACL: 'private', // or 'public-read' if you want public access
     });
 
+    console.log('AWS S3: Uploading file...', {
+      bucket: process.env.AWS_S3_BUCKET_NAME,
+      region: process.env.AWS_REGION,
+      key: filename,
+      fileSize: pdfBuffer.length,
+    });
+
     await s3Client.send(command);
 
     // Generate the S3 URL
     const s3Url = `https://${process.env.AWS_S3_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${filename}`;
     
-    console.log('Successfully uploaded PDF to S3:', s3Url);
-    console.log('S3 Upload - Bucket:', process.env.AWS_S3_BUCKET_NAME, 'Region:', process.env.AWS_REGION, 'Key:', filename);
+    console.log('AWS S3: Successfully uploaded PDF to S3:', s3Url);
+    console.log('AWS S3: Upload details - Bucket:', process.env.AWS_S3_BUCKET_NAME, 'Region:', process.env.AWS_REGION, 'Key:', filename);
     return s3Url;
   } catch (error: any) {
-    console.error('Error uploading PDF to S3:', error);
+    console.error('AWS S3: Error uploading PDF to S3:', error);
+    console.error('AWS S3: Error details:', {
+      message: error?.message,
+      code: error?.code,
+      name: error?.name,
+      stack: process.env.NODE_ENV === 'development' ? error?.stack : undefined,
+    });
+    
+    // Common S3 errors
+    if (error?.code === 'InvalidAccessKeyId') {
+      console.error('AWS S3: Invalid Access Key ID - check AWS_ACCESS_KEY_ID');
+    } else if (error?.code === 'SignatureDoesNotMatch') {
+      console.error('AWS S3: Invalid Secret Access Key - check AWS_SECRET_ACCESS_KEY');
+    } else if (error?.code === 'NoSuchBucket') {
+      console.error('AWS S3: Bucket does not exist - check AWS_S3_BUCKET_NAME');
+    } else if (error?.code === 'AccessDenied') {
+      console.error('AWS S3: Access denied - check IAM permissions for the AWS credentials');
+    }
+    
     return null;
   }
 }
 
 // Function to write assessment data to Google Sheets
+function normalizeSheetHeader(value: string): string {
+  return (value || "")
+    .toLowerCase()
+    .trim()
+    .replace(/[\u200B-\u200D\uFEFF]/g, "") // strip zero-width chars
+    .replace(/[^a-z0-9]/g, "");
+}
+
+function safeCellString(value: unknown): string {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
+function formatAnswerForSheet(
+  question: (typeof questionsData)[number],
+  answerValue: string,
+): string {
+  if (!answerValue) return "";
+
+  if (question.responseType === "yesno" || question.responseType === "select") {
+    const answer = question.options?.find((opt) => opt.value === answerValue);
+    return answer ? answer.label : answerValue;
+  }
+
+  if (question.responseType === "multiselect") {
+    const selectedValues = answerValue.split(",").map((v) => v.trim()).filter(Boolean);
+    return selectedValues
+      .map((val) => question.options?.find((opt) => opt.value === val)?.label || val)
+      .join(", ");
+  }
+
+  if (question.responseType === "ynlist") {
+    try {
+      const ynAnswers = JSON.parse(answerValue);
+      return Object.entries(ynAnswers as Record<string, unknown>)
+        .map(([key, val]) => {
+          const option = question.options?.find((opt) => opt.value === key);
+          return `${option?.label || key}: ${safeCellString(val)}`;
+        })
+        .join("; ");
+    } catch {
+      return answerValue;
+    }
+  }
+
+  // text, number, etc.
+  return answerValue;
+}
+
 async function writeToGoogleSheets(
   personalInfo: PersonalInfo,
   answers: Record<string, string>,
@@ -936,165 +1028,243 @@ async function writeToGoogleSheets(
       return;
     }
 
+    // Parse credentials with better error handling
+    let credentials;
+    try {
+      credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_CREDENTIALS);
+      console.log('Google Sheets: Credentials parsed successfully. Service account:', credentials.client_email);
+    } catch (parseError: any) {
+      console.error('Failed to parse GOOGLE_SERVICE_ACCOUNT_CREDENTIALS:', parseError.message);
+      console.error('First 100 chars of credentials:', process.env.GOOGLE_SERVICE_ACCOUNT_CREDENTIALS?.substring(0, 100));
+      return;
+    }
+
     // Initialize Google Sheets API
     const auth = new google.auth.GoogleAuth({
-      credentials: JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_CREDENTIALS),
+      credentials: credentials,
       scopes: ['https://www.googleapis.com/auth/spreadsheets'],
     });
 
     const sheets = google.sheets({ version: 'v4', auth });
-    const spreadsheetId = '18RSFaMZJYXHwelMLU8e8lCcEm7WhrSt6dasonxKKjJw';
-    const sheetName = 'Sheet1'; // Change if your sheet has a different name
+    const spreadsheetId =
+      process.env.GOOGLE_SHEETS_SPREADSHEET_ID ||
+      process.env.GOOGLE_SHEET_ID ||
+      // Default to the sheet you provided in chat
+      '17IoNsq0xAWSzJVgwnPC_Ej_eUGucW9iw6iVbvanUunE';
+
+    const sheetName =
+      process.env.GOOGLE_SHEETS_ASSESSMENT_SHEET_NAME ||
+      process.env.GOOGLE_SHEETS_SHEET_NAME ||
+      'Sheet1';
+
+    console.log('Google Sheets: Using spreadsheet:', spreadsheetId, 'Sheet:', sheetName);
 
     // Get current questions
     const currentQuestions = questionsData;
 
-    // Prepare headers
     const assessment = computeAssessment(answers);
-    const headers = [
-      'Timestamp',
-      'Name',
-      'Email',
-      'Company',
-      'Position',
-      'Total Score',
-      'Axis A (Urgency) Score',
-      'Axis A Category',
-      'Axis B (Complexity) Score',
-      'Axis B Category',
-      'Eligible',
-      'PDF S3 Link',
-      ...currentQuestions.map(q => `Q${q.id.replace('q', '')} - ${q.text.substring(0, 50)}...`),
-    ];
-
-    const lastColumnLetter = columnToLetter(headers.length);
-    const headerRange = `${sheetName}!A1:${lastColumnLetter}1`;
-
-    // Check if headers exist, if not, add them
-    try {
-      const headerResponse = await sheets.spreadsheets.values.get({
-        spreadsheetId,
-        range: headerRange,
-      });
-
-      // If no headers exist, add them
-      if (!headerResponse.data.values || headerResponse.data.values.length === 0) {
-        console.log('No headers found, adding new headers');
-        await sheets.spreadsheets.values.update({
-          spreadsheetId,
-          range: headerRange,
-          valueInputOption: 'USER_ENTERED',
-          requestBody: {
-            values: [headers],
-          },
-        });
-      } else {
-        // Update headers if they don't match (in case questions changed or new columns added)
-        const existingHeaders = headerResponse.data.values[0];
-        const headersMatch = existingHeaders.length === headers.length && 
-                             JSON.stringify(existingHeaders) === JSON.stringify(headers);
-        
-        if (!headersMatch) {
-          console.log('Headers mismatch detected. Existing:', existingHeaders.length, 'New:', headers.length);
-          console.log('Updating headers to include PDF S3 Link column');
-          await sheets.spreadsheets.values.update({
-            spreadsheetId,
-            range: headerRange,
-            valueInputOption: 'USER_ENTERED',
-            requestBody: {
-              values: [headers],
-            },
-          });
-        } else {
-          console.log('Headers match, no update needed');
-        }
-      }
-    } catch (error) {
-      // If sheet doesn't exist or error, try to create headers
-      console.error('Error checking/updating headers:', error);
-      await sheets.spreadsheets.values.update({
-        spreadsheetId,
-        range: headerRange,
-        valueInputOption: 'USER_ENTERED',
-        requestBody: {
-          values: [headers],
-        },
-      });
-    }
-
-    // Prepare row data
+    // Build a canonical data map (values are strings for cells)
     const timestamp = new Date().toISOString();
-    const rowData = [
-      timestamp,
-      personalInfo.name,
-      personalInfo.email,
-      personalInfo.company,
-      personalInfo.position,
-      assessment.totalScore.toString(),
-      assessment.urgency.score.toString(),
-      assessment.urgency.category,
-      assessment.complexity.score.toString(),
-      assessment.complexity.category,
-      assessment.eligible ? 'Yes' : 'No',
-      pdfS3Url || '',
-      ...currentQuestions.map(q => {
-        const answerValue = answers[q.id] || '';
-        let displayValue = '';
-        
-        if (q.responseType === 'yesno' || q.responseType === 'select') {
-          const answer = q.options?.find(opt => opt.value === answerValue);
-          displayValue = answer ? answer.label : answerValue || '';
-        } else if (q.responseType === 'ynlist') {
-          try {
-            const ynAnswers = JSON.parse(answerValue);
-            displayValue = Object.entries(ynAnswers)
-              .map(([key, val]) => {
-                const option = q.options?.find(opt => opt.value === key);
-                return `${option?.label || key}: ${val}`;
-              })
-              .join('; ');
-          } catch {
-            displayValue = answerValue || '';
-          }
-        } else if (q.responseType === 'multiselect') {
-          const selectedValues = answerValue.split(',').filter(v => v);
-          displayValue = selectedValues
-            .map(val => {
-              const option = q.options?.find(opt => opt.value === val);
-              return option ? option.label : val;
-            })
-            .join(', ');
-        } else {
-          // text, number, or other types - use value directly
-          displayValue = answerValue || '';
-        }
-        
-        return displayValue;
+    const baseFields: Record<string, string> = {
+      Timestamp: timestamp,
+      Name: personalInfo.name,
+      Email: personalInfo.email,
+      Company: personalInfo.company,
+      Position: personalInfo.position,
+      Phone: personalInfo.phone || "",
+      Website: personalInfo.website || "",
+      "Total Score": assessment.totalScore.toString(),
+      "Axis A (Urgency) Score": assessment.urgency.score.toString(),
+      "Axis A Category": assessment.urgency.category,
+      "Axis B (Complexity) Score": assessment.complexity.score.toString(),
+      "Axis B Category": assessment.complexity.category,
+      Eligible: assessment.eligible ? "Yes" : "No",
+      // Don't set PDF S3 Link here - we'll add it separately to ensure it takes precedence
+    };
+
+    // Desired headers (we will create headers if missing, and append any missing columns)
+    const desiredHeaders: string[] = [
+      ...Object.keys(baseFields),
+      ...currentQuestions.map((q) => {
+        const qNum = q.id.replace(/^q/i, "");
+        const cleanText = (q.text || "").replace(/\s+/g, " ").trim();
+        const label = `Q${qNum} - ${cleanText}`;
+        return label.length > 140 ? `${label.slice(0, 137)}...` : label;
       }),
     ];
 
-    console.log('Writing to Google Sheets - PDF S3 URL:', pdfS3Url || 'Not available');
-    console.log('Row data length:', rowData.length, 'Headers length:', headers.length);
+    // Alias map: normalized header -> value
+    const normalizedValueByHeader = new Map<string, string>();
+    const addAlias = (header: string, value: string, forceOverwrite = false) => {
+      const n = normalizeSheetHeader(header);
+      if (!n) return;
+      // If forceOverwrite is true, always set the value
+      // Otherwise, prefer the first non-empty value encountered
+      if (forceOverwrite || !normalizedValueByHeader.has(n) || !normalizedValueByHeader.get(n)) {
+        normalizedValueByHeader.set(n, value);
+      }
+    };
 
-    // Append the new row
+    Object.entries(baseFields).forEach(([k, v]) => addAlias(k, v));
+
+    // Add PDF S3 Link separately - ensure it takes precedence and add multiple aliases
+    // This must be done AFTER baseFields to ensure the actual URL overwrites any empty value
+    // Use forceOverwrite=true to ensure the S3 URL always takes precedence
+    const pdfLinkValue = pdfS3Url || "";
+    addAlias("PDF S3 Link", pdfLinkValue, true);
+    addAlias("PDF S3 URL", pdfLinkValue, true);
+    addAlias("PDF Link", pdfLinkValue, true);
+    addAlias("S3 Link", pdfLinkValue, true);
+    addAlias("S3 URL", pdfLinkValue, true);
+    addAlias("PDF URL", pdfLinkValue, true);
+    
+    if (pdfS3Url) {
+      console.log('Google Sheets: PDF S3 URL to write:', pdfS3Url);
+      console.log('Google Sheets: PDF S3 Link aliases added to mapping');
+    } else {
+      console.log('Google Sheets: PDF S3 URL is empty/null - AWS S3 may not be configured or upload failed');
+    }
+    
+    // Also add it to baseFields for the desired headers list
+    baseFields["PDF S3 Link"] = pdfLinkValue;
+
+    currentQuestions.forEach((q) => {
+      const answerValue = answers[q.id] || "";
+      const displayValue = formatAnswerForSheet(q, answerValue);
+      const qNum = q.id.replace(/^q/i, "");
+      addAlias(q.id, displayValue); // q5
+      addAlias(`Q${qNum}`, displayValue); // Q5
+      addAlias(`Question ${qNum}`, displayValue);
+      addAlias(q.text || "", displayValue);
+      addAlias(`Q${qNum} - ${q.text || ""}`, displayValue);
+
+      // Helpful extra synonyms for the VAT eligibility question (if present)
+      if (q.id.toLowerCase() === "q5") {
+        addAlias("VAT Registered", displayValue);
+        addAlias("VAT registration", displayValue);
+      }
+    });
+
+    // Read existing headers (analyze), extend if needed, then map values by header
+    console.log('Google Sheets: Reading existing headers from', `${sheetName}!1:1`);
+    const existingHeaderResp = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: `${sheetName}!1:1`,
+    });
+    console.log('Google Sheets: Existing headers found:', existingHeaderResp.data.values?.[0]?.length || 0);
+
+    const existingHeaders: string[] =
+      existingHeaderResp.data.values && existingHeaderResp.data.values[0]
+        ? existingHeaderResp.data.values[0].map((h) => safeCellString(h))
+        : [];
+
+    const existingHeaderSet = new Set(existingHeaders.map(normalizeSheetHeader).filter(Boolean));
+
+    let finalHeaders: string[] = existingHeaders.length > 0 ? [...existingHeaders] : [];
+
+    // If no headers yet, create from desired headers
+    if (finalHeaders.length === 0) {
+      finalHeaders = [...desiredHeaders];
+    } else {
+      // Append any missing desired headers so we can capture ALL details
+      for (const h of desiredHeaders) {
+        const nh = normalizeSheetHeader(h);
+        if (nh && !existingHeaderSet.has(nh)) {
+          finalHeaders.push(h);
+          existingHeaderSet.add(nh);
+        }
+      }
+    }
+
+    const lastColumnLetter = columnToLetter(finalHeaders.length);
+    const headerRange = `${sheetName}!A1:${lastColumnLetter}1`;
+
+    // Ensure header row matches finalHeaders (without overwriting user-defined columns order)
+    await sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: headerRange,
+      valueInputOption: "USER_ENTERED",
+      requestBody: { values: [finalHeaders] },
+    });
+
+    // Build row in the exact header order
+    const rowData = finalHeaders.map((h, index) => {
+      const normalized = normalizeSheetHeader(h);
+      const direct = normalizedValueByHeader.get(normalized);
+      if (direct !== undefined) {
+        // Log PDF S3 Link mapping for debugging
+        if (normalized.includes('pdf') && (normalized.includes('link') || normalized.includes('url'))) {
+          console.log(`Google Sheets: Mapped "${h}" (normalized: "${normalized}") at column ${index + 1} to value:`, direct || '(empty)', 'Length:', direct?.length || 0);
+        }
+        return direct;
+      }
+
+      // Heuristic: if header contains something like "q5", map to that question
+      const qMatch = (h || "").match(/q\s*0*(\d+)/i);
+      if (qMatch?.[1]) {
+        const qKey = normalizeSheetHeader(`q${qMatch[1]}`);
+        const fromQ = normalizedValueByHeader.get(qKey);
+        if (fromQ !== undefined) return fromQ;
+      }
+
+      return "";
+    });
+
+    // Find PDF S3 Link column index for logging
+    const pdfLinkHeaderIndex = finalHeaders.findIndex(h => {
+      const n = normalizeSheetHeader(h);
+      return n.includes('pdf') && (n.includes('link') || n.includes('url'));
+    });
+    const pdfLinkValueInRow = pdfLinkHeaderIndex >= 0 ? rowData[pdfLinkHeaderIndex] : 'N/A';
+    
+    // Debug: Check what's in the normalizedValueByHeader map for PDF S3 Link
+    const pdfLinkNormalized = normalizeSheetHeader("PDF S3 Link");
+    const pdfLinkInMap = normalizedValueByHeader.get(pdfLinkNormalized);
+
+    console.log("Google Sheets: Writing row with", {
+      spreadsheetId,
+      sheetName,
+      headerCount: finalHeaders.length,
+      rowCellCount: rowData.length,
+      firstFewHeaders: finalHeaders.slice(0, 5),
+      firstFewValues: rowData.slice(0, 5),
+      pdfS3LinkColumnIndex: pdfLinkHeaderIndex,
+      pdfS3LinkHeader: pdfLinkHeaderIndex >= 0 ? finalHeaders[pdfLinkHeaderIndex] : 'Not found',
+      pdfS3LinkValueInRow: pdfLinkValueInRow,
+      pdfS3LinkValueInMap: pdfLinkInMap,
+      pdfS3UrlProvided: pdfS3Url || '(null/empty)',
+      normalizedKey: pdfLinkNormalized,
+      mapHasKey: normalizedValueByHeader.has(pdfLinkNormalized),
+    });
+
     await sheets.spreadsheets.values.append({
       spreadsheetId,
       range: `${sheetName}!A:${lastColumnLetter}`,
-      valueInputOption: 'USER_ENTERED',
-      insertDataOption: 'INSERT_ROWS',
-      requestBody: {
-        values: [rowData],
-      },
+      valueInputOption: "USER_ENTERED",
+      insertDataOption: "INSERT_ROWS",
+      requestBody: { values: [rowData] },
     });
 
-    console.log('Successfully wrote assessment data to Google Sheets');
+    console.log('Google Sheets: Successfully wrote assessment data to Google Sheets');
   } catch (error: any) {
-    console.error('Error writing to Google Sheets:', error);
-    console.error('Error details:', {
+    console.error('Google Sheets: Error writing to Google Sheets:', error);
+    console.error('Google Sheets: Error details:', {
       message: error?.message,
       code: error?.code,
+      status: error?.response?.status,
+      statusText: error?.response?.statusText,
       response: error?.response?.data,
+      stack: process.env.NODE_ENV === 'development' ? error?.stack : undefined,
     });
+    
+    // Common error: Sheet not shared with service account
+    if (error?.code === 403 || error?.response?.status === 403) {
+      console.error('Google Sheets: PERMISSION DENIED - Make sure the spreadsheet is shared with:', 
+        process.env.GOOGLE_SERVICE_ACCOUNT_CREDENTIALS ? 
+          JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_CREDENTIALS).client_email : 
+          'the service account email');
+    }
+    
     // Don't throw error - we don't want to fail the email sending if sheets write fails
   }
 }
@@ -1226,18 +1396,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   let userEmailSent = false;
   
   try {
-    // Validate required environment variables
-    if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASS || !process.env.FROM_EMAIL) {
-      console.error('Missing email configuration:', {
-        SMTP_HOST: !!process.env.SMTP_HOST,
-        SMTP_USER: !!process.env.SMTP_USER,
-        SMTP_PASS: !!process.env.SMTP_PASS,
-        FROM_EMAIL: !!process.env.FROM_EMAIL,
-      });
-      return res.status(500).json({ message: 'Email configuration is missing. Please contact support.' });
-    }
-
-    // Validate email address
+    // Validate email address (always check this)
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(personalInfo.email)) {
       console.error('Invalid email address:', personalInfo.email);
@@ -1246,15 +1405,77 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     console.log('Starting assessment processing for:', personalInfo.email, personalInfo.company);
 
-    // Generate PDF buffer
-    console.log('Generating PDF buffer...');
-    const pdfBuffer = await generatePDFBuffer(personalInfo, answers);
-    console.log('PDF buffer generated successfully, size:', pdfBuffer.length, 'bytes');
+    // Check if email is configured (but don't block if it's not - Google Sheets is more important)
+    const emailConfigured = !!(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS && process.env.FROM_EMAIL);
+    if (!emailConfigured) {
+      console.warn('Email configuration is missing - will skip email sending but still write to Google Sheets:', {
+        SMTP_HOST: !!process.env.SMTP_HOST,
+        SMTP_USER: !!process.env.SMTP_USER,
+        SMTP_PASS: !!process.env.SMTP_PASS,
+        FROM_EMAIL: !!process.env.FROM_EMAIL,
+      });
+    }
 
-    // Upload PDF to S3
-    console.log('Starting S3 upload for company:', personalInfo.company);
-    const pdfS3Url = await uploadPDFToS3(pdfBuffer, personalInfo.company, personalInfo);
-    console.log('S3 upload result:', pdfS3Url ? 'Success' : 'Failed', pdfS3Url || '');
+    // Generate PDF buffer once (used for both S3 upload and email attachment)
+    let pdfBuffer: Buffer | null = null;
+    let pdfS3Url: string | null = null;
+    
+    try {
+      console.log('Generating PDF buffer...');
+      pdfBuffer = await generatePDFBuffer(personalInfo, answers);
+      console.log('PDF buffer generated successfully, size:', pdfBuffer.length, 'bytes');
+
+      // Upload PDF to S3 (optional)
+      console.log('Starting S3 upload for company:', personalInfo.company);
+      pdfS3Url = await uploadPDFToS3(pdfBuffer, personalInfo.company, personalInfo);
+      
+      if (pdfS3Url) {
+        console.log('S3 upload SUCCESS - URL:', pdfS3Url);
+      } else {
+        console.warn('S3 upload FAILED or skipped - PDF S3 URL will be empty in Google Sheets');
+        console.warn('To enable S3 uploads, configure AWS credentials in .env.local:');
+        console.warn('  - AWS_ACCESS_KEY_ID');
+        console.warn('  - AWS_SECRET_ACCESS_KEY');
+        console.warn('  - AWS_S3_BUCKET_NAME');
+        console.warn('  - AWS_REGION');
+      }
+    } catch (pdfError) {
+      console.error('PDF generation/upload failed, continuing without PDF URL:', pdfError);
+      if (pdfError instanceof Error) {
+        console.error('PDF Error details:', {
+          message: pdfError.message,
+          stack: process.env.NODE_ENV === 'development' ? pdfError.stack : undefined,
+        });
+      }
+    }
+
+    // Write assessment data to Google Sheets FIRST (before email processing)
+    // This ensures data is captured even if email fails
+    console.log('Writing to Google Sheets...');
+    try {
+      await writeToGoogleSheets(personalInfo, answers, assessment.totalScore, pdfS3Url);
+      console.log('Google Sheets write completed');
+    } catch (sheetsError) {
+      console.error('Error writing to Google Sheets:', sheetsError);
+      // Don't fail the whole request if Google Sheets fails, but log it
+    }
+
+    // If email is not configured, return success (Google Sheets already wrote)
+    if (!emailConfigured) {
+      console.log('Assessment processing completed (Google Sheets only, email skipped)');
+      return res.status(200).json({ 
+        message: 'Assessment results saved successfully',
+        emailSent: false,
+        sheetsWritten: true,
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    // If PDF generation failed and email is configured, generate it now for email attachment
+    if (!pdfBuffer) {
+      console.log('Generating PDF buffer for email attachment...');
+      pdfBuffer = await generatePDFBuffer(personalInfo, answers);
+    }
 
     // Prepare user email content with appointment booking information
     const userEmailContent = `
@@ -1416,7 +1637,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const userEmailResult = await transporter.sendMail({
         from: process.env.FROM_EMAIL,
         to: personalInfo.email,
-        replyTo: 'anisha@cs.rsm.ae',
+        replyTo: 'e-invoice-inquiry@rsm.ae',
         subject: `E-Invoicing Assessment Report – ${personalInfo.company}`,
         html: userEmailContent,
         attachments: [
@@ -1446,7 +1667,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const internalEmailResult = await transporter.sendMail({
         from: process.env.FROM_EMAIL,
         to: "arpit.m@nexuses.in,anisha.a@nexuses.in",
-        replyTo: 'anisha@cs.rsm.ae',
+        replyTo: 'e-invoice-inquiry@rsm.ae',
         subject: "E-Invoicing Assessment - UAE",
         html: emailContent,
       });
@@ -1456,15 +1677,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // Continue even if internal email fails
     }
 
-    // Write assessment data to Google Sheets
-    console.log('Writing to Google Sheets...');
-    try {
-      await writeToGoogleSheets(personalInfo, answers, assessment.totalScore, pdfS3Url);
-      console.log('Google Sheets write completed');
-    } catch (sheetsError) {
-      console.error('Error writing to Google Sheets:', sheetsError);
-      // Continue even if Google Sheets write fails
-    }
+    // Google Sheets write already happened above (before email processing)
 
     console.log('Assessment processing completed successfully');
     res.status(200).json({ 
