@@ -1,6 +1,9 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
 import nodemailer from 'nodemailer'
 import { Readable } from 'stream'
+import fs from 'fs'
+import path from 'path'
+import os from 'os'
 import React from 'react';
 import { Document, Page, Text, View, StyleSheet, pdf, Image } from '@react-pdf/renderer';
 import { questionsData } from '@/lib/questions';
@@ -853,17 +856,31 @@ async function generatePDFBuffer(
     return React.createElement(Document, {}, ...pages);
   };
 
-  // Generate PDF buffer - toBuffer() may return Buffer or ReadableStream; consume to Buffer for Vercel
-  const pdfDoc = pdf(createDocument());
-  const out = await pdfDoc.toBuffer();
-  if (Buffer.isBuffer(out)) return out;
-  const stream = out as Readable;
-  return new Promise<Buffer>((resolve, reject) => {
-    const chunks: Buffer[] = [];
-    stream.on('data', (chunk: Buffer | Uint8Array) => chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)));
-    stream.on('end', () => resolve(Buffer.concat(chunks)));
-    stream.on('error', reject);
-  });
+  async function fromStream(): Promise<Buffer> {
+    const pdfDoc = pdf(createDocument());
+    const out = await pdfDoc.toBuffer();
+    if (Buffer.isBuffer(out) && out.length > 0) return out;
+    const stream = out as Readable;
+    return new Promise<Buffer>((resolve, reject) => {
+      const chunks: Buffer[] = [];
+      stream.on('data', (chunk: Buffer | Uint8Array) => chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)));
+      stream.on('end', () => resolve(Buffer.concat(chunks)));
+      stream.on('error', reject);
+    });
+  }
+
+  async function fromBlob(): Promise<Buffer> {
+    const pdfDoc = pdf(createDocument());
+    const blob = await pdfDoc.toBlob();
+    const arrayBuffer = await blob.arrayBuffer();
+    return Buffer.from(arrayBuffer);
+  }
+
+  let buf = await fromStream();
+  if (!buf || buf.length === 0) {
+    buf = await fromBlob();
+  }
+  return buf;
 }
 
 // Helper function to convert column number to letter (e.g., 1 -> A, 27 -> AA)
@@ -1651,6 +1668,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         });
       }
 
+      const pdfAttachmentFilename = `${personalInfo.company.replace(/[^a-zA-Z0-9]/g, '_')}_E_Invoicing_Assessment_Report.pdf`;
+      let tmpPdfPath: string | null = null;
+      if (pdfBuffer && pdfBuffer.length > 0) {
+        try {
+          tmpPdfPath = path.join(os.tmpdir(), `rsm-pdf-${Date.now()}-${Math.random().toString(36).slice(2)}.pdf`);
+          fs.writeFileSync(tmpPdfPath, pdfBuffer);
+          console.log('PDF written to tmp for attachment, size:', pdfBuffer.length, 'bytes');
+        } catch (tmpErr) {
+          console.error('Failed to write PDF to /tmp:', tmpErr);
+        }
+      }
+
       // Send email to user with PDF attachment
       console.log('Sending email to user:', personalInfo.email);
       try {
@@ -1661,13 +1690,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           subject: `E-Invoicing Assessment Report – ${personalInfo.company}`,
           html: userEmailContent,
         };
-        if (pdfBuffer && pdfBuffer.length > 0) {
+        if (tmpPdfPath && fs.existsSync(tmpPdfPath)) {
+          userMailOptions.attachments = [{ filename: pdfAttachmentFilename, path: tmpPdfPath }];
+        } else if (pdfBuffer && pdfBuffer.length > 0) {
           userMailOptions.attachments = [
-            {
-              filename: `${personalInfo.company.replace(/[^a-zA-Z0-9]/g, '_')}_E_Invoicing_Assessment_Report.pdf`,
-              content: pdfBuffer.toString('base64'),
-              encoding: 'base64',
-            },
+            { filename: pdfAttachmentFilename, content: pdfBuffer, contentType: 'application/pdf' },
           ];
         }
         const userEmailResult = await transporter.sendMail(userMailOptions);
@@ -1694,13 +1721,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           subject: "E-Invoicing Assessment - UAE",
           html: emailContent,
         };
-        if (pdfBuffer && pdfBuffer.length > 0) {
+        if (tmpPdfPath && fs.existsSync(tmpPdfPath)) {
+          internalMailOptions.attachments = [{ filename: pdfAttachmentFilename, path: tmpPdfPath }];
+        } else if (pdfBuffer && pdfBuffer.length > 0) {
           internalMailOptions.attachments = [
-            {
-              filename: `${personalInfo.company.replace(/[^a-zA-Z0-9]/g, '_')}_E_Invoicing_Assessment_Report.pdf`,
-              content: pdfBuffer.toString('base64'),
-              encoding: 'base64',
-            },
+            { filename: pdfAttachmentFilename, content: pdfBuffer, contentType: 'application/pdf' },
           ];
         }
         const internalEmailResult = await transporter.sendMail(internalMailOptions);
@@ -1708,6 +1733,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       } catch (internalEmailError) {
         console.error('Error sending internal email:', internalEmailError);
         // Continue even if internal email fails
+      }
+
+      if (tmpPdfPath && fs.existsSync(tmpPdfPath)) {
+        try {
+          fs.unlinkSync(tmpPdfPath);
+        } catch (_) {}
       }
     }
 
