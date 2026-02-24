@@ -1,8 +1,7 @@
 {
   "functions": {
-    "pages/api/generate-pdf.ts": {
-      "maxDuration": 30
-    }
+    "pages/api/generate-pdf.ts": { "maxDuration": 30 },
+    "pages/api/send-assessment.ts": { "maxDuration": 60 }
   },
   "regions": ["iad1"]
-} 
+}

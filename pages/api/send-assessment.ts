@@ -1284,16 +1284,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const assessment = computeAssessment(answers);
   const currentQuestions = questionsData;
 
-  // Create a transporter using SMTP
+  // Create a transporter using SMTP (serverless-friendly: timeouts + TLS for port 587)
+  const port = parseInt(process.env.SMTP_PORT || '587', 10);
   const transporter = nodemailer.createTransport({
     host: process.env.SMTP_HOST,
-    port: parseInt(process.env.SMTP_PORT || '587'),
+    port,
     secure: process.env.SMTP_SECURE === 'true',
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS,
-    },
-  })
+    auth: process.env.SMTP_USER && process.env.SMTP_PASS
+      ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
+      : undefined,
+    connectionTimeout: 15000,
+    greetingTimeout: 10000,
+    socketTimeout: 20000,
+    ...(port === 587 && { requireTLS: true }),
+  });
 
   // Prepare email content with HTML formatting
   const emailContent = `
@@ -1414,7 +1418,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Check if email is configured (but don't block if it's not - Google Sheets is more important)
     const emailConfigured = !!(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS && process.env.FROM_EMAIL);
     if (!emailConfigured) {
-      console.warn('Email configuration is missing - will skip email sending but still write to Google Sheets:', {
+      console.warn('Email configuration is missing - will skip email sending but still write to Google Sheets. On Vercel: set SMTP_HOST, SMTP_USER, SMTP_PASS, FROM_EMAIL in Project Settings → Environment Variables.', {
         SMTP_HOST: !!process.env.SMTP_HOST,
         SMTP_USER: !!process.env.SMTP_USER,
         SMTP_PASS: !!process.env.SMTP_PASS,
@@ -1617,80 +1621,83 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       </html>
     `;
 
-    // Verify transporter is configured
-    try {
-      await transporter.verify();
-      console.log('SMTP server connection verified');
-    } catch (verifyError: any) {
-      console.error('SMTP verification failed:', verifyError);
-      console.error('SMTP Config:', {
-        host: process.env.SMTP_HOST,
-        port: process.env.SMTP_PORT,
-        secure: process.env.SMTP_SECURE,
-        user: process.env.SMTP_USER ? '***' : 'MISSING',
-        pass: process.env.SMTP_PASS ? '***' : 'MISSING',
-        from: process.env.FROM_EMAIL,
-      });
-      return res.status(500).json({ 
-        message: 'Email server configuration error. Please contact support.',
-        error: process.env.NODE_ENV === 'development' ? String(verifyError) : undefined
-      });
-    }
-
-    // Send email to user with PDF attachment
-    console.log('Sending email to user:', personalInfo.email);
-    try {
-      const userEmailResult = await transporter.sendMail({
-        from: process.env.FROM_EMAIL,
-        to: personalInfo.email,
-        replyTo: 'e-invoice-inquiry@rsm.ae',
-        subject: `E-Invoicing Assessment Report – ${personalInfo.company}`,
-        html: userEmailContent,
-        attachments: [
-          {
-            filename: `${personalInfo.company.replace(/[^a-zA-Z0-9]/g, '_')}_E_Invoicing_Assessment_Report.pdf`,
-            content: pdfBuffer,
-            contentType: 'application/pdf',
-          },
-        ],
-      });
-      console.log('User email sent successfully. MessageId:', userEmailResult.messageId);
-      userEmailSent = true;
-    } catch (userEmailError: any) {
-      console.error('Error sending user email:', userEmailError);
-      console.error('Email error details:', {
-        message: userEmailError?.message,
-        code: userEmailError?.code,
-        response: userEmailError?.response,
-        command: userEmailError?.command,
-      });
-      // Continue to send internal email even if user email fails
-    }
-
-    // Send internal notification email (with user's PDF report attached)
-    console.log('Sending internal notification email...');
-    try {
-      const internalMailOptions: Parameters<typeof transporter.sendMail>[0] = {
-        from: process.env.FROM_EMAIL,
-        to: "arpit.m@nexuses.in,anisha.a@nexuses.in,E-invoice-inquiry@rsm.ae",
-        replyTo: 'e-invoice-inquiry@rsm.ae',
-        subject: "E-Invoicing Assessment - UAE",
-        html: emailContent,
-      };
-      if (pdfBuffer) {
-        internalMailOptions.attachments = [
-          {
-            filename: `${personalInfo.company.replace(/[^a-zA-Z0-9]/g, '_')}_E_Invoicing_Assessment_Report.pdf`,
-            content: pdfBuffer,
-            contentType: 'application/pdf',
-          },
-        ];
+    if (emailConfigured) {
+      // Verify transporter is configured
+      try {
+        await transporter.verify();
+        console.log('SMTP server connection verified');
+      } catch (verifyError: any) {
+        console.error('SMTP verification failed:', verifyError);
+        console.error('SMTP Config:', {
+          host: process.env.SMTP_HOST,
+          port: process.env.SMTP_PORT,
+          secure: process.env.SMTP_SECURE,
+          user: process.env.SMTP_USER ? '***' : 'MISSING',
+          pass: process.env.SMTP_PASS ? '***' : 'MISSING',
+          from: process.env.FROM_EMAIL,
+        });
+        return res.status(500).json({
+          message: 'Email server configuration error. Please contact support.',
+          hint: 'On Vercel: ensure SMTP_HOST, SMTP_USER, SMTP_PASS, FROM_EMAIL are set in Project Settings → Environment Variables. Use port 587 (STARTTLS) or 465 (SSL); port 25 is blocked.',
+          error: process.env.NODE_ENV === 'development' ? String(verifyError?.message ?? verifyError) : undefined,
+        });
       }
-      const internalEmailResult = await transporter.sendMail(internalMailOptions);
-      console.log('Internal email sent successfully. MessageId:', internalEmailResult.messageId);
-    } catch (internalEmailError) {
-      console.error('Error sending internal email:', internalEmailError);
-      // Continue even if internal email fails
+
+      // Send email to user with PDF attachment
+      console.log('Sending email to user:', personalInfo.email);
+      try {
+        const userEmailResult = await transporter.sendMail({
+          from: process.env.FROM_EMAIL,
+          to: personalInfo.email,
+          replyTo: 'e-invoice-inquiry@rsm.ae',
+          subject: `E-Invoicing Assessment Report – ${personalInfo.company}`,
+          html: userEmailContent,
+          attachments: [
+            {
+              filename: `${personalInfo.company.replace(/[^a-zA-Z0-9]/g, '_')}_E_Invoicing_Assessment_Report.pdf`,
+              content: pdfBuffer,
+              contentType: 'application/pdf',
+            },
+          ],
+        });
+        console.log('User email sent successfully. MessageId:', userEmailResult.messageId);
+        userEmailSent = true;
+      } catch (userEmailError: any) {
+        console.error('Error sending user email:', userEmailError);
+        console.error('Email error details:', {
+          message: userEmailError?.message,
+          code: userEmailError?.code,
+          response: userEmailError?.response,
+          command: userEmailError?.command,
+        });
+        // Continue to send internal email even if user email fails
+      }
+
+      // Send internal notification email (with user's PDF report attached)
+      console.log('Sending internal notification email...');
+      try {
+        const internalMailOptions: Parameters<typeof transporter.sendMail>[0] = {
+          from: process.env.FROM_EMAIL,
+          to: "arpit.m@nexuses.in,anisha.a@nexuses.in,E-invoice-inquiry@rsm.ae",
+          replyTo: 'e-invoice-inquiry@rsm.ae',
+          subject: "E-Invoicing Assessment - UAE",
+          html: emailContent,
+        };
+        if (pdfBuffer) {
+          internalMailOptions.attachments = [
+            {
+              filename: `${personalInfo.company.replace(/[^a-zA-Z0-9]/g, '_')}_E_Invoicing_Assessment_Report.pdf`,
+              content: pdfBuffer,
+              contentType: 'application/pdf',
+            },
+          ];
+        }
+        const internalEmailResult = await transporter.sendMail(internalMailOptions);
+        console.log('Internal email sent successfully. MessageId:', internalEmailResult.messageId);
+      } catch (internalEmailError) {
+        console.error('Error sending internal email:', internalEmailError);
+        // Continue even if internal email fails
+      }
     }
 
     // Google Sheets write already happened above (before email processing)
