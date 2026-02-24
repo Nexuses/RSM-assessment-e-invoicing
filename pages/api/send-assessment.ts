@@ -852,13 +852,15 @@ async function generatePDFBuffer(
     return React.createElement(Document, {}, ...pages);
   };
 
-  // Generate PDF buffer - use blob() method and convert to Buffer
+  // Generate PDF buffer - use toBuffer() and consume stream to Buffer (reliable on Vercel serverless)
   const pdfDoc = pdf(createDocument());
-  const blob = await pdfDoc.toBlob();
-  
-  // Convert Blob to Buffer
-  const arrayBuffer = await blob.arrayBuffer();
-  return Buffer.from(arrayBuffer);
+  const out = await pdfDoc.toBuffer();
+  if (Buffer.isBuffer(out)) return out;
+  const chunks: Buffer[] = [];
+  for await (const chunk of out as AsyncIterable<Uint8Array>) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+  return Buffer.concat(chunks);
 }
 
 // Helper function to convert column number to letter (e.g., 1 -> A, 27 -> AA)
