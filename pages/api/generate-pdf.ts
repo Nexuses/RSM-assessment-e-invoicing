@@ -1,4 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
+import { Readable } from 'stream';
 import React from 'react';
 import { Document, Page, Text, View, StyleSheet, pdf, Image } from '@react-pdf/renderer';
 import { questionsData } from '@/lib/questions';
@@ -647,14 +648,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return React.createElement(Document, {}, ...pages);
     };
 
-    // Generate PDF buffer
-    const pdfBuffer = await pdf(createDocument()).toBuffer();
+    // Generate PDF: toBuffer() returns a stream; consume to Buffer so response is complete (works on Vercel)
+    const pdfDoc = pdf(createDocument());
+    const out = await pdfDoc.toBuffer();
+    let pdfBuffer: Buffer;
+    if (Buffer.isBuffer(out) && out.length > 0) {
+      pdfBuffer = out;
+    } else {
+      const stream = out as Readable;
+      pdfBuffer = await new Promise<Buffer>((resolve, reject) => {
+        const chunks: Buffer[] = [];
+        stream.on('data', (chunk: Buffer | Uint8Array) => chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)));
+        stream.on('end', () => resolve(Buffer.concat(chunks)));
+        stream.on('error', reject);
+      });
+    }
 
-    // Set response headers
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', 'attachment; filename=assessment_report.pdf');
-
-    // Send the PDF
     res.send(pdfBuffer);
   } catch (error) {
     console.error('Error generating PDF:', error);

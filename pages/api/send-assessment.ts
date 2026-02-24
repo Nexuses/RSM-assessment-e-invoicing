@@ -883,6 +883,42 @@ async function generatePDFBuffer(
   return buf;
 }
 
+// On Vercel, get PDF by calling the generate-pdf API (separate function = reliable PDF generation)
+async function getPdfBufferViaApi(
+  personalInfo: PersonalInfo,
+  answers: Record<string, string>
+): Promise<Buffer | null> {
+  const baseUrl = process.env.VERCEL_URL
+    ? `https://${process.env.VERCEL_URL}`
+    : process.env.VERCEL_PROJECT_PRODUCTION_URL
+      ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+      : null;
+  if (!baseUrl) return null;
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 35000);
+    const res = await fetch(`${baseUrl}/api/generate-pdf`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ personalInfo, answers }),
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+    if (!res.ok) {
+      console.error('generate-pdf API error:', res.status, await res.text());
+      return null;
+    }
+    const arrayBuffer = await res.arrayBuffer();
+    const buf = Buffer.from(arrayBuffer);
+    if (buf.length === 0) return null;
+    console.log('PDF from generate-pdf API, size:', buf.length, 'bytes');
+    return buf;
+  } catch (e) {
+    console.error('getPdfBufferViaApi failed:', e);
+    return null;
+  }
+}
+
 // Helper function to convert column number to letter (e.g., 1 -> A, 27 -> AA)
 function columnToLetter(column: number): string {
   let temp, letter = '';
@@ -1457,9 +1493,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     let pdfS3Url: string | null = null;
     
     try {
-      console.log('Generating PDF buffer...');
-      pdfBuffer = await generatePDFBuffer(personalInfo, answers);
-      console.log('PDF buffer generated successfully, size:', pdfBuffer.length, 'bytes');
+      if (process.env.VERCEL_URL) {
+        console.log('Vercel: fetching PDF via generate-pdf API...');
+        pdfBuffer = await getPdfBufferViaApi(personalInfo, answers);
+      }
+      if (!pdfBuffer || pdfBuffer.length === 0) {
+        console.log('Generating PDF buffer inline...');
+        pdfBuffer = await generatePDFBuffer(personalInfo, answers);
+      }
+      if (pdfBuffer && pdfBuffer.length > 0) {
+        console.log('PDF buffer ready, size:', pdfBuffer.length, 'bytes');
+      }
 
       // Upload PDF to S3 (optional)
       console.log('Starting S3 upload for company:', personalInfo.company);
@@ -1507,11 +1551,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       });
     }
 
-    // If PDF generation failed and email is configured, generate it now for email attachment
-    if (!pdfBuffer) {
+    // If PDF generation failed and email is configured, try again for email attachment
+    if (!pdfBuffer || pdfBuffer.length === 0) {
       try {
-        console.log('Generating PDF buffer for email attachment...');
-        pdfBuffer = await generatePDFBuffer(personalInfo, answers);
+        if (process.env.VERCEL_URL) {
+          pdfBuffer = await getPdfBufferViaApi(personalInfo, answers);
+        }
+        if (!pdfBuffer || pdfBuffer.length === 0) {
+          console.log('Generating PDF buffer for email attachment...');
+          pdfBuffer = await generatePDFBuffer(personalInfo, answers);
+        }
       } catch (retryPdfError: any) {
         console.error('PDF generation for email failed:', retryPdfError?.message ?? retryPdfError);
       }
