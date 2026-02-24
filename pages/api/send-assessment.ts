@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
 import nodemailer from 'nodemailer'
+import { Readable } from 'stream'
 import React from 'react';
 import { Document, Page, Text, View, StyleSheet, pdf, Image } from '@react-pdf/renderer';
 import { questionsData } from '@/lib/questions';
@@ -852,15 +853,17 @@ async function generatePDFBuffer(
     return React.createElement(Document, {}, ...pages);
   };
 
-  // Generate PDF buffer - use toBuffer() and consume stream to Buffer (reliable on Vercel serverless)
+  // Generate PDF buffer - toBuffer() may return Buffer or ReadableStream; consume to Buffer for Vercel
   const pdfDoc = pdf(createDocument());
   const out = await pdfDoc.toBuffer();
   if (Buffer.isBuffer(out)) return out;
-  const chunks: Buffer[] = [];
-  for await (const chunk of out as AsyncIterable<Uint8Array>) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-  }
-  return Buffer.concat(chunks);
+  const stream = out as Readable;
+  return new Promise<Buffer>((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    stream.on('data', (chunk: Buffer | Uint8Array) => chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)));
+    stream.on('end', () => resolve(Buffer.concat(chunks)));
+    stream.on('error', reject);
+  });
 }
 
 // Helper function to convert column number to letter (e.g., 1 -> A, 27 -> AA)
@@ -1658,12 +1661,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           subject: `E-Invoicing Assessment Report – ${personalInfo.company}`,
           html: userEmailContent,
         };
-        if (pdfBuffer) {
+        if (pdfBuffer && pdfBuffer.length > 0) {
           userMailOptions.attachments = [
             {
               filename: `${personalInfo.company.replace(/[^a-zA-Z0-9]/g, '_')}_E_Invoicing_Assessment_Report.pdf`,
-              content: pdfBuffer,
-              contentType: 'application/pdf',
+              content: pdfBuffer.toString('base64'),
+              encoding: 'base64',
             },
           ];
         }
@@ -1691,12 +1694,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           subject: "E-Invoicing Assessment - UAE",
           html: emailContent,
         };
-        if (pdfBuffer) {
+        if (pdfBuffer && pdfBuffer.length > 0) {
           internalMailOptions.attachments = [
             {
               filename: `${personalInfo.company.replace(/[^a-zA-Z0-9]/g, '_')}_E_Invoicing_Assessment_Report.pdf`,
-              content: pdfBuffer,
-              contentType: 'application/pdf',
+              content: pdfBuffer.toString('base64'),
+              encoding: 'base64',
             },
           ];
         }
