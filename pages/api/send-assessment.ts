@@ -1280,6 +1280,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ message: 'Method Not Allowed' })
   }
 
+  if (!req.body || !req.body.personalInfo || !req.body.answers) {
+    return res.status(400).json({ message: 'Invalid email address provided.' });
+  }
+
   const { personalInfo, answers } = req.body as AssessmentData
   const assessment = computeAssessment(answers);
   const currentQuestions = questionsData;
@@ -1483,8 +1487,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // If PDF generation failed and email is configured, generate it now for email attachment
     if (!pdfBuffer) {
-      console.log('Generating PDF buffer for email attachment...');
-      pdfBuffer = await generatePDFBuffer(personalInfo, answers);
+      try {
+        console.log('Generating PDF buffer for email attachment...');
+        pdfBuffer = await generatePDFBuffer(personalInfo, answers);
+      } catch (retryPdfError: any) {
+        console.error('PDF generation for email failed:', retryPdfError?.message ?? retryPdfError);
+      }
     }
 
     // Prepare user email content with appointment booking information
@@ -1622,12 +1630,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     `;
 
     if (emailConfigured) {
-      // Verify transporter is configured
+      // Verify transporter (continue to send even if verify fails; some SMTP servers work in serverless only for send)
       try {
         await transporter.verify();
         console.log('SMTP server connection verified');
       } catch (verifyError: any) {
-        console.error('SMTP verification failed:', verifyError);
+        console.error('SMTP verification failed (will still attempt send):', verifyError?.message ?? verifyError);
         console.error('SMTP Config:', {
           host: process.env.SMTP_HOST,
           port: process.env.SMTP_PORT,
@@ -1636,30 +1644,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           pass: process.env.SMTP_PASS ? '***' : 'MISSING',
           from: process.env.FROM_EMAIL,
         });
-        return res.status(500).json({
-          message: 'Email server configuration error. Please contact support.',
-          hint: 'On Vercel: ensure SMTP_HOST, SMTP_USER, SMTP_PASS, FROM_EMAIL are set in Project Settings → Environment Variables. Use port 587 (STARTTLS) or 465 (SSL); port 25 is blocked.',
-          error: process.env.NODE_ENV === 'development' ? String(verifyError?.message ?? verifyError) : undefined,
-        });
       }
 
       // Send email to user with PDF attachment
       console.log('Sending email to user:', personalInfo.email);
       try {
-        const userEmailResult = await transporter.sendMail({
+        const userMailOptions: Parameters<typeof transporter.sendMail>[0] = {
           from: process.env.FROM_EMAIL,
           to: personalInfo.email,
           replyTo: 'e-invoice-inquiry@rsm.ae',
           subject: `E-Invoicing Assessment Report – ${personalInfo.company}`,
           html: userEmailContent,
-          attachments: [
+        };
+        if (pdfBuffer) {
+          userMailOptions.attachments = [
             {
               filename: `${personalInfo.company.replace(/[^a-zA-Z0-9]/g, '_')}_E_Invoicing_Assessment_Report.pdf`,
               content: pdfBuffer,
               contentType: 'application/pdf',
             },
-          ],
-        });
+          ];
+        }
+        const userEmailResult = await transporter.sendMail(userMailOptions);
         console.log('User email sent successfully. MessageId:', userEmailResult.messageId);
         userEmailSent = true;
       } catch (userEmailError: any) {
