@@ -883,21 +883,17 @@ async function generatePDFBuffer(
   return buf;
 }
 
-// On Vercel, get PDF by calling the generate-pdf API (separate function = reliable PDF generation)
+// Get PDF by calling the generate-pdf API (reliable on Vercel when URL is correct)
 async function getPdfBufferViaApi(
   personalInfo: PersonalInfo,
-  answers: Record<string, string>
+  answers: Record<string, string>,
+  baseUrl: string
 ): Promise<Buffer | null> {
-  const baseUrl = process.env.VERCEL_URL
-    ? `https://${process.env.VERCEL_URL}`
-    : process.env.VERCEL_PROJECT_PRODUCTION_URL
-      ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
-      : null;
-  if (!baseUrl) return null;
+  const url = `${baseUrl.replace(/\/$/, '')}/api/generate-pdf`;
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 35000);
-    const res = await fetch(`${baseUrl}/api/generate-pdf`, {
+    const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ personalInfo, answers }),
@@ -1342,8 +1338,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ message: 'Invalid email address provided.' });
   }
 
-  const { personalInfo, answers } = req.body as AssessmentData
+  const { personalInfo, answers, origin: clientOrigin } = req.body as AssessmentData & { origin?: string };
   const assessment = computeAssessment(answers);
+
+  // Base URL for calling our own generate-pdf API (client origin is most reliable on Vercel)
+  const baseUrl =
+    (typeof clientOrigin === 'string' && clientOrigin)
+      ? clientOrigin.replace(/\/$/, '')
+      : req.headers.host
+        ? `${(req.headers['x-forwarded-proto'] as string) || 'https'}://${req.headers.host}`
+        : process.env.VERCEL_URL
+          ? `https://${process.env.VERCEL_URL}`
+          : '';
   const currentQuestions = questionsData;
 
   // Create a transporter using SMTP (serverless-friendly: timeouts + TLS for port 587)
@@ -1493,22 +1499,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     let pdfS3Url: string | null = null;
     
     try {
-      if (process.env.VERCEL_URL) {
-        console.log('Vercel: fetching PDF via generate-pdf API...');
-        pdfBuffer = await getPdfBufferViaApi(personalInfo, answers);
+      if (baseUrl) {
+        console.log('Fetching PDF via generate-pdf API at', baseUrl);
+        pdfBuffer = await getPdfBufferViaApi(personalInfo, answers, baseUrl);
       }
       if (!pdfBuffer || pdfBuffer.length === 0) {
         console.log('Generating PDF buffer inline...');
         pdfBuffer = await generatePDFBuffer(personalInfo, answers);
       }
       if (pdfBuffer && pdfBuffer.length > 0) {
-        console.log('PDF buffer ready, size:', pdfBuffer.length, 'bytes');
+        console.log('PDF is generated. Size:', pdfBuffer.length, 'bytes');
       }
 
       // Upload PDF to S3 (optional)
-      console.log('Starting S3 upload for company:', personalInfo.company);
-      pdfS3Url = await uploadPDFToS3(pdfBuffer, personalInfo.company, personalInfo);
-      
+      if (pdfBuffer && pdfBuffer.length > 0) {
+        console.log('Starting S3 upload for company:', personalInfo.company);
+        pdfS3Url = await uploadPDFToS3(pdfBuffer, personalInfo.company, personalInfo);
+      }
       if (pdfS3Url) {
         console.log('S3 upload SUCCESS - URL:', pdfS3Url);
       } else {
@@ -1554,8 +1561,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // If PDF generation failed and email is configured, try again for email attachment
     if (!pdfBuffer || pdfBuffer.length === 0) {
       try {
-        if (process.env.VERCEL_URL) {
-          pdfBuffer = await getPdfBufferViaApi(personalInfo, answers);
+        if (baseUrl) {
+          pdfBuffer = await getPdfBufferViaApi(personalInfo, answers, baseUrl);
         }
         if (!pdfBuffer || pdfBuffer.length === 0) {
           console.log('Generating PDF buffer for email attachment...');
@@ -1748,6 +1755,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
         const userEmailResult = await transporter.sendMail(userMailOptions);
         console.log('User email sent successfully. MessageId:', userEmailResult.messageId);
+        if (userMailOptions.attachments?.length) {
+          console.log('PDF is sent with user email to', personalInfo.email);
+        }
         userEmailSent = true;
       } catch (userEmailError: any) {
         console.error('Error sending user email:', userEmailError);
@@ -1779,6 +1789,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
         const internalEmailResult = await transporter.sendMail(internalMailOptions);
         console.log('Internal email sent successfully. MessageId:', internalEmailResult.messageId);
+        if (internalMailOptions.attachments?.length) {
+          console.log('PDF is sent with internal notification email');
+        }
       } catch (internalEmailError) {
         console.error('Error sending internal email:', internalEmailError);
         // Continue even if internal email fails

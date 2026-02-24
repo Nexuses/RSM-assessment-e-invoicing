@@ -648,22 +648,41 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return React.createElement(Document, {}, ...pages);
     };
 
-    // Generate PDF: toBuffer() returns a stream; consume to Buffer so response is complete (works on Vercel)
+    // Generate PDF: try stream first, then toBlob fallback (toBlob often works when stream does not on Vercel)
     const pdfDoc = pdf(createDocument());
+    let pdfBuffer: Buffer | null = null;
+
     const out = await pdfDoc.toBuffer();
-    let pdfBuffer: Buffer;
     if (Buffer.isBuffer(out) && out.length > 0) {
       pdfBuffer = out;
     } else {
       const stream = out as Readable;
       pdfBuffer = await new Promise<Buffer>((resolve, reject) => {
         const chunks: Buffer[] = [];
+        const timer = setTimeout(() => {
+          if (chunks.length > 0) resolve(Buffer.concat(chunks));
+          else reject(new Error('PDF stream timeout'));
+        }, 20000);
         stream.on('data', (chunk: Buffer | Uint8Array) => chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)));
-        stream.on('end', () => resolve(Buffer.concat(chunks)));
-        stream.on('error', reject);
+        stream.on('end', () => {
+          clearTimeout(timer);
+          resolve(Buffer.concat(chunks));
+        });
+        stream.on('error', (err) => {
+          clearTimeout(timer);
+          reject(err);
+        });
       });
     }
 
+    if (!pdfBuffer || pdfBuffer.length === 0) {
+      const pdfDoc2 = pdf(createDocument());
+      const blob = await pdfDoc2.toBlob();
+      const arrayBuffer = await blob.arrayBuffer();
+      pdfBuffer = Buffer.from(arrayBuffer);
+    }
+
+    console.log('PDF is generated. Size:', pdfBuffer.length, 'bytes');
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', 'attachment; filename=assessment_report.pdf');
     res.send(pdfBuffer);

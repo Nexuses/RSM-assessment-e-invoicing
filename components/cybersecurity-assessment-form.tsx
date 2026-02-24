@@ -235,9 +235,9 @@ export function CybersecurityAssessmentForm() {
         website: personalInfo.website,
       },
       answers: finalAnswers,
-      // keep legacy 'score' but send full computed result as well
       score: result.totalScore,
       assessment: result,
+      origin: typeof window !== 'undefined' ? window.location.origin : '',
     };
 
     // Send the data to the server
@@ -408,6 +408,7 @@ export function CybersecurityAssessmentForm() {
       answers: finalAnswers,
       score: result.totalScore,
       assessment: result,
+      origin: typeof window !== 'undefined' ? window.location.origin : '',
     };
 
     // Send the data to the server
