@@ -1,24 +1,28 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   images: {
-    domains: [
-      "cdn-nexlink.s3.us-east-2.amazonaws.com",
-      "22527425.fs1.hubspotusercontent-na2.net",
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'cdn-nexlink.s3.us-east-2.amazonaws.com',
+      },
+      {
+        protocol: 'https',
+        hostname: '22527425.fs1.hubspotusercontent-na2.net',
+      },
     ],
   },
   reactStrictMode: true,
-  swcMinify: true,
   transpilePackages: ["framer-motion"],
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
-  experimental: {
-    serverComponentsExternalPackages: ['@react-pdf/renderer'],
+  serverExternalPackages: ['@react-pdf/renderer'],
+  turbopack: {
+    // Ensure this project directory is treated as the Turbo/Next root
+    root: __dirname,
   },
   webpack: (config, { isServer }) => {
     if (isServer) {
       config.externals.push({
-        'canvas': 'canvas',
+        canvas: 'canvas',
       });
     }
     return config;
