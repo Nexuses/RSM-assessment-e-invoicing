@@ -616,7 +616,7 @@ async function generatePDFBuffer(
     const allAnswers = Object.entries(answers);
     // Keep the first page comfortably within A4 height to avoid an extra blank page.
     const questionsPerThirdPage = 5; // First page: Summary + first set of Q&As
-    const questionsPerPage = 15; // For subsequent pages
+    const questionsPerPage = 11; // For subsequent pages
     const questionChunksRaw: [string, string][][] = [];
     
     // First chunk: first set of questions (rendered on the first page)

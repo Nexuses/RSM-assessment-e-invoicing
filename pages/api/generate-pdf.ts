@@ -434,11 +434,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       
       // Split questions into chunks for better page management
       const allAnswers = Object.entries(answers);
-      const questionsPerSecondPage = 11;
-      const questionsPerPage = 15; // For subsequent pages
+      const questionsPerSecondPage = 5;
+      const questionsPerPage = 11; // For subsequent pages
       const questionChunks: [string, string][][] = [];
       
-      // First chunk: 11 questions (for second page)
+      // First chunk: 5 questions (for second page)
       if (allAnswers.length > 0) {
         questionChunks.push(allAnswers.slice(0, questionsPerSecondPage));
       }
