@@ -136,7 +136,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const transporter = buildTransporter();
     const adminRecipients =
       process.env.CONSULTATION_RECIPIENTS ||
-      "arpit.m@nexuses.in, anisha@cs.rsm.ae, anisha.a@nexuses.in, GRC-Inquiry@RSM.ae, rsm-tech-aaaahib5qyhpf2k6egbqwrugwa@nexuses.slack.com";
+      "anisha@cs.rsm.ae, GRC-Inquiry@RSM.ae, rsm-tech-aaaahib5qyhpf2k6egbqwrugwa@nexuses.slack.com";
 
     const adminHtml = `
       <!DOCTYPE html>
