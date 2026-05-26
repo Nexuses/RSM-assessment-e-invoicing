@@ -3,6 +3,8 @@ import React from 'react';
 import { Document, Page, Text, View, StyleSheet, pdf, Image } from '@react-pdf/renderer';
 import { questionsData } from '@/lib/questions';
 import { computeAssessment } from '@/lib/scoring';
+import { formatEntitiesDisplay } from '@/lib/entities';
+import { formatYesNoDetailsDisplay } from '@/lib/yesno-details';
 
 // Add language parameter to the request body type
 interface RequestBody {
@@ -71,8 +73,9 @@ const createStyles = () => StyleSheet.create({
     alignItems: 'flex-end',
   },
   logo: {
-    width: 80,
-    height: 40,
+    width: 100,
+    height: 48,
+    objectFit: 'contain',
   },
   companyName: {
     fontSize: 18,
@@ -477,6 +480,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                   return option ? option.label : val;
                 })
                 .join(', ');
+            } else if (question.responseType === 'yesno_details') {
+              displayAnswer = formatYesNoDetailsDisplay(answerValue);
+            } else if (question.responseType === 'entities') {
+              displayAnswer = formatEntitiesDisplay(answerValue);
             } else {
               // text, number, or other types - use value directly
               displayAnswer = answerValue || 'Not answered';

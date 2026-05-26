@@ -4,15 +4,49 @@ export type AssessmentAxisResult = {
   recommendation: string;
 };
 
+export type PhaseRecommendation = {
+  phase: 'phase_1' | 'phase_2' | 'other';
+  label: string;
+  description: string;
+};
+
 export type AssessmentResult = {
   eligible: boolean;
   ineligibleReason?: string;
+  phaseRecommendation: PhaseRecommendation;
   urgency: AssessmentAxisResult;
   complexity: AssessmentAxisResult;
   totalScore: number;
   maxUrgencyScore: number;
   maxComplexityScore: number;
 };
+
+/** Phase is driven by question 1 (q2): annual aggregate turnover band. */
+export function getPhaseFromTurnover(answers: Record<string, string>): PhaseRecommendation {
+  switch (answers.q2) {
+    case 'gt_50m':
+      return {
+        phase: 'phase_1',
+        label: 'Phase 1',
+        description:
+          'Contact RSM to schedule a meeting to assess your technical and compliance readiness for Phase 1 (critical priority).',
+      };
+    case 'lt_50m':
+      return {
+        phase: 'phase_2',
+        label: 'Phase 2',
+        description:
+          'Start planning for Phase 2 compliance (2027+) and engage with a solution provider.',
+      };
+    default:
+      return {
+        phase: 'other',
+        label: 'To be confirmed',
+        description:
+          'Monitor regulatory updates and prepare when required. Phase applicability could not be determined from your turnover response.',
+      };
+  }
+}
 
 const MAX_URGENCY = 23;
 const MAX_COMPLEXITY = 81;
@@ -88,6 +122,7 @@ export function computeAssessment(answers: Record<string, string>): AssessmentRe
       eligible: false,
       ineligibleReason:
         'Not registered for VAT in the UAE. Per the assessment logic, this disqualifies the entity from the e-invoicing mandate scope for scoring purposes.',
+      phaseRecommendation: getPhaseFromTurnover(answers),
       urgency: { score: 0, category: 'Out of scope', recommendation: 'No scoring applied.' },
       complexity: { score: 0, category: 'N/A', recommendation: 'No scoring applied.' },
       totalScore: 0,
@@ -208,6 +243,8 @@ export function computeAssessment(answers: Record<string, string>): AssessmentRe
         return 5;
       case 'manual':
         return 10;
+      case 'unknown':
+        return 5;
       default:
         return 0;
     }
@@ -274,6 +311,7 @@ export function computeAssessment(answers: Record<string, string>): AssessmentRe
 
   return {
     eligible: true,
+    phaseRecommendation: getPhaseFromTurnover(answers),
     urgency,
     complexity,
     totalScore: urgencyScore + complexityScore,

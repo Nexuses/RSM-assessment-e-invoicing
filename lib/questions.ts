@@ -1,5 +1,7 @@
 export type ResponseType =
   | 'yesno'
+  | 'yesno_details'
+  | 'entities'
   | 'text'
   | 'number'
   | 'select'
@@ -101,16 +103,6 @@ export const questionsData: Question[] = [
     ],
   },
   {
-    id: 'q8',
-    text: 'Do you issue invoices from multiple locations or branches?',
-    subject: 'Part 2: Volume & Scope',
-    responseType: 'yesno',
-    options: [
-      { value: '0', label: 'No, centralized invoicing' },
-      { value: '1', label: 'Yes, multiple branches issuing independently' },
-    ],
-  },
-  {
     id: 'q9',
     text: 'Do you require e-invoicing compliance for countries other than the UAE?',
     subject: 'Part 2: Volume & Scope',
@@ -122,50 +114,31 @@ export const questionsData: Question[] = [
     ],
   },
   {
-    id: 'q9_1',
-    text: 'Company Name (list all entities if part of a group)',
-    subject: 'Part 2A: Additional Implementation Inputs',
-    responseType: 'text',
-    placeholder: 'Enter company name(s) and entity list',
+    id: 'q9_10',
+    text: 'Do you have e-invoicing requirements in other countries?',
+    subject: 'Part 2: Volume & Scope',
+    responseType: 'yesno_details',
+    options: [
+      { value: '1', label: 'Yes' },
+      { value: '0', label: 'No' },
+    ],
+    placeholder: 'Enter country names',
   },
   {
-    id: 'q9_2',
-    text: 'Are any entities part of the FTA pilot or planning voluntary adoption by July 2026? (If yes, specify entities)',
-    subject: 'Part 2A: Additional Implementation Inputs',
-    responseType: 'text',
-    placeholder: 'Enter Yes/No and entity names if applicable',
+    id: 'q8',
+    text: 'Do you issue invoices from multiple locations or branches?',
+    subject: 'Part 2: Volume & Scope',
+    responseType: 'yesno',
+    options: [
+      { value: '0', label: 'No, centralized invoicing' },
+      { value: '1', label: 'Yes, multiple branches issuing independently' },
+    ],
   },
   {
-    id: 'q9_3',
-    text: 'Number of entities with revenue above AED 50M (Phase 1)',
+    id: 'q9_entities',
+    text: 'Entity details (add each legal entity if part of a group)',
     subject: 'Part 2A: Additional Implementation Inputs',
-    responseType: 'number',
-    placeholder: 'Enter number of entities',
-    validation: { min: 0 },
-  },
-  {
-    id: 'q9_4',
-    text: 'Number of entities with revenue below AED 50M (Phase 2)',
-    subject: 'Part 2A: Additional Implementation Inputs',
-    responseType: 'number',
-    placeholder: 'Enter number of entities',
-    validation: { min: 0 },
-  },
-  {
-    id: 'q9_5',
-    text: 'Estimated number of sales invoices per year (B2B & B2G) per entity',
-    subject: 'Part 2A: Additional Implementation Inputs',
-    responseType: 'number',
-    placeholder: 'Enter estimated annual sales invoices per entity',
-    validation: { min: 0 },
-  },
-  {
-    id: 'q9_6',
-    text: 'Estimated number of purchase invoices per year (excluding imports) per entity',
-    subject: 'Part 2A: Additional Implementation Inputs',
-    responseType: 'number',
-    placeholder: 'Enter estimated annual purchase invoices per entity',
-    validation: { min: 0 },
+    responseType: 'entities',
   },
   {
     id: 'q9_7',
@@ -180,7 +153,7 @@ export const questionsData: Question[] = [
     subject: 'Part 2A: Additional Implementation Inputs',
     responseType: 'select',
     options: [
-      { value: 'customer_team', label: 'Customer team' },
+      { value: 'customer_team', label: 'Client team' },
       { value: 'vendor', label: 'Vendor' },
       { value: 'require_asp_support', label: 'Require ASP support' },
     ],
@@ -194,20 +167,6 @@ export const questionsData: Question[] = [
       { value: 'full_integration', label: 'Full integration' },
       { value: 'dashboard_manual', label: 'Dashboard only (manual entry)' },
     ],
-  },
-  {
-    id: 'q9_10',
-    text: 'Do you have e-invoicing requirements in other countries? (If yes, specify countries)',
-    subject: 'Part 2A: Additional Implementation Inputs',
-    responseType: 'text',
-    placeholder: 'Enter Yes/No and country names if applicable',
-  },
-  {
-    id: 'q9_11',
-    text: 'Any additional requirements or comments?',
-    subject: 'Part 2A: Additional Implementation Inputs',
-    responseType: 'text',
-    placeholder: 'Enter any additional notes',
   },
   {
     id: 'q10',
@@ -230,6 +189,7 @@ export const questionsData: Question[] = [
       { value: 'api', label: 'Yes, REST/SOAP APIs are available' },
       { value: 'sftp', label: 'No, we use SFTP / File exports (CSV/XML)' },
       { value: 'manual', label: 'No, Manual Only' },
+      { value: 'unknown', label: "I don't know" },
     ],
   },
   {
@@ -296,5 +256,12 @@ export const questionsData: Question[] = [
       { value: 'hybrid', label: 'Hybrid' },
       { value: 'manual', label: 'Manual' },
     ],
+  },
+  {
+    id: 'q9_11',
+    text: 'Any additional requirements or comments?',
+    subject: 'Part 2A: Additional Implementation Inputs',
+    responseType: 'text',
+    placeholder: 'Enter any additional notes',
   },
 ];

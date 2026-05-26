@@ -20,6 +20,7 @@ import {
   ChevronRight,
   Check,
   Phone,
+  Plus,
   UserRound,
   X,
 } from "lucide-react";
@@ -39,6 +40,21 @@ import {
 import styles from "@/styles/CybersecurityAssessmentForm.module.css";
 import { questionsData, Question } from '@/lib/questions';
 import { computeAssessment, type AssessmentResult } from "@/lib/scoring";
+import {
+  createEmptyEntity,
+  getEntitiesList,
+  stringifyEntities,
+  FTA_PILOT_OPTIONS,
+  TURNOVER_BAND_OPTIONS,
+  validateEntities,
+  type EntityRecord,
+} from "@/lib/entities";
+import {
+  getCountriesList,
+  hasAtLeastOneCountry,
+  parseYesNoDetails,
+  stringifyYesNoDetails,
+} from "@/lib/yesno-details";
 
 // Add this near the top of the file, before the component
 const BLOCKED_EMAIL_DOMAINS = [
@@ -308,6 +324,26 @@ export function CybersecurityAssessmentForm() {
           return;
         }
       }
+
+      if (currentQ.responseType === 'yesno_details') {
+        const details = parseYesNoDetails(currentAnswer);
+        if (!details?.choice) {
+          setFormErrors(["Please select Yes or No."]);
+          return;
+        }
+        if (details.choice === '1' && !hasAtLeastOneCountry(details)) {
+          setFormErrors(["Please specify at least one country."]);
+          return;
+        }
+      }
+
+      if (currentQ.responseType === 'entities') {
+        const entityError = validateEntities(currentAnswer);
+        if (entityError) {
+          setFormErrors([entityError]);
+          return;
+        }
+      }
       
       setFormErrors([]);
       setCurrentQuestion(currentQuestion + 1);
@@ -350,6 +386,26 @@ export function CybersecurityAssessmentForm() {
           }
         } catch (e) {
           setFormErrors(["Please answer at least one option."]);
+          return;
+        }
+      }
+
+      if (currentQ.responseType === 'yesno_details') {
+        const details = parseYesNoDetails(currentAnswer);
+        if (!details?.choice) {
+          setFormErrors(["Please select Yes or No."]);
+          return;
+        }
+        if (details.choice === '1' && !hasAtLeastOneCountry(details)) {
+          setFormErrors(["Please specify at least one country."]);
+          return;
+        }
+      }
+
+      if (currentQ.responseType === 'entities') {
+        const entityError = validateEntities(currentAnswer);
+        if (entityError) {
+          setFormErrors([entityError]);
           return;
         }
       }
@@ -931,7 +987,324 @@ export function CybersecurityAssessmentForm() {
                     const currentAnswer = answers[currentQ.id] || '';
                     
                     // Render based on response type
-                    if (currentQ.responseType === 'yesno' || currentQ.responseType === 'select') {
+                    if (currentQ.responseType === 'entities') {
+                      const entityList = getEntitiesList(currentAnswer);
+
+                      const updateEntities = (entities: EntityRecord[]) => {
+                        handleAnswerChange(currentQ.id, stringifyEntities(entities));
+                      };
+
+                      const updateEntityAt = (
+                        index: number,
+                        field: keyof EntityRecord,
+                        value: string,
+                      ) => {
+                        const next = entityList.map((entity, i) =>
+                          i === index ? { ...entity, [field]: value } : entity,
+                        );
+                        updateEntities(next);
+                      };
+
+                      const addEntity = () => {
+                        updateEntities([...entityList, createEmptyEntity()]);
+                      };
+
+                      const removeEntity = (index: number) => {
+                        if (entityList.length <= 1) return;
+                        updateEntities(entityList.filter((_, i) => i !== index));
+                      };
+
+                      const fieldClassName =
+                        "h-12 rounded-xl border-gray-200 bg-white text-base focus-visible:ring-2 focus-visible:ring-[#00AEEF]";
+                      const selectClassName =
+                        "h-12 w-full rounded-xl border border-gray-200 bg-white px-4 text-base text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00AEEF]";
+
+                      return (
+                        <div className="flex flex-col gap-5">
+                          {entityList.map((entity, index) => (
+                            <div
+                              key={index}
+                              className="rounded-2xl border border-gray-200 bg-[#fafafa] p-5 sm:p-6"
+                            >
+                              <div className="mb-5 flex items-center justify-between">
+                                <p className="text-sm font-bold uppercase tracking-wide text-[#3F9C35]">
+                                  Entity #{index + 1}
+                                </p>
+                                {entityList.length > 1 && (
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={() => removeEntity(index)}
+                                    className="h-9 rounded-lg border-gray-200 px-3 text-xs text-gray-600"
+                                  >
+                                    Remove
+                                  </Button>
+                                )}
+                              </div>
+                              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                                <div className="space-y-2">
+                                  <Label className="text-sm font-semibold text-[#1b3a57]">
+                                    Entity legal name <span className="text-red-500">*</span>
+                                  </Label>
+                                  <Input
+                                    value={entity.legalName}
+                                    onChange={(e) =>
+                                      updateEntityAt(index, "legalName", e.target.value)
+                                    }
+                                    placeholder="e.g. ABC Trading LLC"
+                                    className={fieldClassName}
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <Label className="text-sm font-semibold text-[#1b3a57]">
+                                    TRN (15 digits, optional)
+                                  </Label>
+                                  <Input
+                                    value={entity.trn}
+                                    onChange={(e) =>
+                                      updateEntityAt(index, "trn", e.target.value)
+                                    }
+                                    placeholder="100xxxxxxxxxxxx"
+                                    maxLength={15}
+                                    className={fieldClassName}
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <Label className="text-sm font-semibold text-[#1b3a57]">
+                                    Annual turnover band <span className="text-red-500">*</span>
+                                  </Label>
+                                  <select
+                                    value={entity.turnoverBand}
+                                    onChange={(e) =>
+                                      updateEntityAt(index, "turnoverBand", e.target.value)
+                                    }
+                                    className={selectClassName}
+                                  >
+                                    <option value="">Select...</option>
+                                    {TURNOVER_BAND_OPTIONS.map((option) => (
+                                      <option key={option.value} value={option.value}>
+                                        {option.label}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+                                <div className="space-y-2">
+                                  <Label className="text-sm font-semibold text-[#1b3a57]">
+                                    Sales invoices/year (B2B &amp; B2G){" "}
+                                    <span className="text-red-500">*</span>
+                                  </Label>
+                                  <Input
+                                    type="number"
+                                    min={0}
+                                    value={entity.salesInvoicesPerYear}
+                                    onChange={(e) =>
+                                      updateEntityAt(
+                                        index,
+                                        "salesInvoicesPerYear",
+                                        e.target.value,
+                                      )
+                                    }
+                                    placeholder="e.g. 12000"
+                                    className={fieldClassName}
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <Label className="text-sm font-semibold text-[#1b3a57]">
+                                    Purchase invoices/year (excl. imports){" "}
+                                    <span className="text-red-500">*</span>
+                                  </Label>
+                                  <Input
+                                    type="number"
+                                    min={0}
+                                    value={entity.purchaseInvoicesPerYear}
+                                    onChange={(e) =>
+                                      updateEntityAt(
+                                        index,
+                                        "purchaseInvoicesPerYear",
+                                        e.target.value,
+                                      )
+                                    }
+                                    placeholder="e.g. 8000"
+                                    className={fieldClassName}
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <Label className="text-sm font-semibold text-[#1b3a57]">
+                                    FTA pilot / voluntary adoption by Jul 2026?{" "}
+                                    <span className="text-red-500">*</span>
+                                  </Label>
+                                  <select
+                                    value={entity.ftaPilotAdoption}
+                                    onChange={(e) =>
+                                      updateEntityAt(index, "ftaPilotAdoption", e.target.value)
+                                    }
+                                    className={selectClassName}
+                                  >
+                                    <option value="">Select...</option>
+                                    {FTA_PILOT_OPTIONS.map((option) => (
+                                      <option key={option.value} value={option.value}>
+                                        {option.label}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={addEntity}
+                            className="h-12 w-full rounded-2xl border-2 border-dashed border-[#3F9C35] bg-[#f0fbf4] text-sm font-semibold text-[#3F9C35] hover:bg-[#e6f5ed]"
+                          >
+                            <Plus className="mr-2 h-4 w-4" />
+                            Add another entity
+                          </Button>
+                        </div>
+                      );
+                    } else if (currentQ.responseType === 'yesno_details') {
+                      const details = parseYesNoDetails(currentAnswer) ?? {
+                        choice: '' as const,
+                        countries: [],
+                      };
+                      const selectedChoice = details.choice;
+                      const countryList = getCountriesList(
+                        selectedChoice === '1' ? details : null,
+                      );
+
+                      const updateYesNoDetails = (choice: '0' | '1', countries?: string[]) => {
+                        handleAnswerChange(
+                          currentQ.id,
+                          stringifyYesNoDetails({
+                            choice,
+                            countries:
+                              choice === '1'
+                                ? countries ?? getCountriesList({ choice: '1', countries: [] })
+                                : [],
+                          }),
+                        );
+                      };
+
+                      const updateCountryAt = (index: number, value: string) => {
+                        const next = [...countryList];
+                        next[index] = value;
+                        updateYesNoDetails('1', next);
+                      };
+
+                      const addCountry = () => {
+                        updateYesNoDetails('1', [...countryList, '']);
+                      };
+
+                      const removeCountry = (index: number) => {
+                        if (countryList.length <= 1) return;
+                        updateYesNoDetails(
+                          '1',
+                          countryList.filter((_, i) => i !== index),
+                        );
+                      };
+
+                      return (
+                        <div className="flex flex-col gap-4">
+                          {currentQ.options?.map((option) => {
+                            const id = `${currentQ.id}-${option.value}`;
+                            const isSelected = selectedChoice === option.value;
+                            return (
+                              <div key={option.value} className="flex-1">
+                                <input
+                                  type="radio"
+                                  id={id}
+                                  name={currentQ.id}
+                                  value={option.value}
+                                  checked={isSelected}
+                                  onChange={() =>
+                                    updateYesNoDetails(
+                                      option.value as '0' | '1',
+                                      option.value === '1' ? countryList : [],
+                                    )
+                                  }
+                                  className="sr-only"
+                                />
+                                <Label
+                                  htmlFor={id}
+                                  className={cn(
+                                    "flex w-full items-center gap-4 rounded-2xl border bg-white px-5 py-4 text-sm font-medium text-gray-700 shadow-sm transition-all focus:outline-none cursor-pointer",
+                                    option.value === "1" && "border border-[#3F9C35]",
+                                    option.value === "0" && "border border-[#00AEEF]",
+                                    !isSelected && option.value === "1" && "hover:border-[#3F9C35] hover:shadow-lg",
+                                    !isSelected && option.value === "0" && "hover:border-[#00AEEF] hover:shadow-lg",
+                                    isSelected && option.value === "1" &&
+                                      "border-[#3F9C35] bg-gradient-to-r from-[#22c55e] to-[#16a34a] text-white shadow-[0_12px_30px_rgba(34,197,94,0.22)] hover:shadow-[0_12px_30px_rgba(34,197,94,0.3)]",
+                                    isSelected && option.value === "0" &&
+                                      "border-[#00AEEF] bg-gradient-to-r from-[#ef4444] to-[#dc2626] text-white shadow-[0_12px_30px_rgba(239,68,68,0.22)] hover:shadow-[0_12px_30px_rgba(239,68,68,0.3)]",
+                                  )}
+                                >
+                                  <span
+                                    className={cn(
+                                      "flex h-6 w-6 items-center justify-center rounded-full border-2 border-gray-300 transition-colors",
+                                      isSelected && "border-white bg-white",
+                                    )}
+                                  >
+                                    <Check
+                                      className={cn(
+                                        "h-3.5 w-3.5 transition-opacity",
+                                        isSelected && option.value === "1" && "text-[#22c55e] opacity-100",
+                                        isSelected && option.value === "0" && "text-[#ef4444] opacity-100",
+                                        !isSelected && "opacity-0",
+                                      )}
+                                    />
+                                  </span>
+                                  <span
+                                    className={cn(
+                                      "flex-1 text-left",
+                                      isSelected && "text-white font-semibold",
+                                    )}
+                                  >
+                                    {option.label}
+                                  </span>
+                                </Label>
+                              </div>
+                            );
+                          })}
+                          {selectedChoice === '1' && (
+                            <div className="mt-2 space-y-3">
+                              <Label className="block text-sm font-semibold text-[#1b3a57]">
+                                Specify countries
+                              </Label>
+                              {countryList.map((country, index) => (
+                                <div key={index} className="flex items-center gap-2">
+                                  <Input
+                                    value={country}
+                                    onChange={(e) => updateCountryAt(index, e.target.value)}
+                                    placeholder={currentQ.placeholder || 'Enter country name'}
+                                    className="h-12 flex-1 rounded-xl border-gray-200 bg-white text-base focus-visible:ring-2 focus-visible:ring-[#00AEEF]"
+                                  />
+                                  {countryList.length > 1 && (
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      onClick={() => removeCountry(index)}
+                                      className="h-12 w-12 shrink-0 rounded-xl border-gray-200 p-0"
+                                      aria-label="Remove country"
+                                    >
+                                      <X className="h-4 w-4" />
+                                    </Button>
+                                  )}
+                                </div>
+                              ))}
+                              <Button
+                                type="button"
+                                variant="outline"
+                                onClick={addCountry}
+                                className="h-11 w-full rounded-full border-[#00AEEF] text-sm font-semibold text-[#00AEEF] hover:bg-[#e6f5fc]"
+                              >
+                                <Plus className="mr-2 h-4 w-4" />
+                                Add another country
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    } else if (currentQ.responseType === 'yesno' || currentQ.responseType === 'select') {
                       return (
                         <div className="flex flex-col gap-4">
                           {currentQ.options?.map((option) => {
@@ -1186,7 +1559,7 @@ export function CybersecurityAssessmentForm() {
                         </p>
                       </motion.div>
 
-                      {/* Phase recommendation - derived from computed score (Axis A urgency) */}
+                      {/* Phase recommendation - from question 1 (q2: annual turnover) */}
                       {assessment?.eligible !== false && assessment && (
                         <motion.div
                           initial={{ opacity: 0, y: 10 }}
@@ -1195,36 +1568,16 @@ export function CybersecurityAssessmentForm() {
                           className="mt-4 px-6 py-3"
                         >
                           <div className="rounded-2xl border-2 border-[#00AEEF] bg-gradient-to-r from-[#e6f5fc] to-[#d0ebf7] px-6 py-5 shadow-md">
-                            {assessment.urgency.score >= 18 ? (
-                              <div className="text-center">
-                                <div className="mb-3">
-                                  <span className="bg-[#00AEEF] text-white px-3 py-1.5 rounded-md font-bold text-sm">Phase 1:</span>
-                                </div>
-                                <p className="text-base font-semibold text-[#1b3a57]">
-                                  Contact RSM to schedule a meeting to assess your technical and compliance readiness for Phase 1{" "}
-                                  <span className="bg-yellow-200 px-2 py-0.5 rounded font-semibold text-sm">(critical priority)</span>.
-                                </p>
+                            <div className="text-center">
+                              <div className="mb-3">
+                                <span className="bg-[#00AEEF] text-white px-3 py-1.5 rounded-md font-bold text-sm">
+                                  {assessment.phaseRecommendation.label}:
+                                </span>
                               </div>
-                            ) : assessment.urgency.score >= 10 ? (
-                              <div className="text-center">
-                                <div className="mb-3">
-                                  <span className="bg-[#00AEEF] text-white px-3 py-1.5 rounded-md font-bold text-sm">Phase 2:</span>
-                                </div>
-                                <p className="text-base font-semibold text-[#1b3a57]">
-                                  Start planning for Phase 2 compliance{" "}
-                                  <span className="bg-yellow-200 px-2 py-0.5 rounded font-semibold text-sm">(2027+)</span> and engage with a solution provider.
-                                </p>
-                              </div>
-                            ) : (
-                              <div className="text-center">
-                                <div className="mb-3">
-                                  <span className="bg-[#1b3a57] text-white px-3 py-1.5 rounded-md font-bold text-sm">Low Priority:</span>
-                                </div>
-                                <p className="text-base font-semibold text-[#1b3a57]">
-                                  Monitor regulatory updates and prepare when required. No immediate Phase 1/2 action is indicated by your current urgency score.
-                                </p>
-                              </div>
-                            )}
+                              <p className="text-base font-semibold text-[#1b3a57]">
+                                {assessment.phaseRecommendation.description}
+                              </p>
+                            </div>
                           </div>
                         </motion.div>
                       )}

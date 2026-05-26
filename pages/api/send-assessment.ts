@@ -4,6 +4,8 @@ import React from 'react';
 import { Document, Page, Text, View, StyleSheet, pdf, Image } from '@react-pdf/renderer';
 import { questionsData } from '@/lib/questions';
 import { computeAssessment } from '@/lib/scoring';
+import { formatEntitiesDisplay } from '@/lib/entities';
+import { formatYesNoDetailsDisplay } from '@/lib/yesno-details';
 import { google } from 'googleapis';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 
@@ -127,12 +129,11 @@ const createStyles = () => StyleSheet.create({
     paddingBottom: 30,
     flex: 1,
   },
-  // Use a tighter top padding on subsequent pages to avoid occasional blank-page layout issues
-  // in @react-pdf/renderer when table blocks are close to the page height.
-  contentAreaTight: {
+  // Continuation pages: extra top padding so tables sit below the fixed logo
+  contentAreaContinuation: {
     padding: 40,
-    paddingTop: 60,
-    paddingBottom: 30,
+    paddingTop: 110,
+    paddingBottom: 90,
     flex: 1,
   },
   section: {
@@ -305,12 +306,22 @@ const createStyles = () => StyleSheet.create({
     overflow: 'hidden',
   },
   questionsTableContainerPageBreak: {
-    marginTop: 15,
+    marginTop: 20,
     borderWidth: 2,
     borderColor: '#009CD9',
     borderStyle: 'solid',
     borderRadius: 12,
     overflow: 'hidden',
+  },
+  pageFooterDisclaimer: {
+    position: 'absolute',
+    bottom: 28,
+    left: 40,
+    right: 40,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0',
+    borderTopStyle: 'solid',
   },
   questionsTable: {
     marginTop: 0,
@@ -440,11 +451,9 @@ const createStyles = () => StyleSheet.create({
     color: '#757574',
     lineHeight: 1.5,
     textAlign: 'left',
-    marginTop: 3,
-    paddingTop: 3,
-    borderTopWidth: 1,
-    borderTopColor: '#e0e0e0',
-    borderTopStyle: 'solid',
+    marginTop: 0,
+    paddingTop: 0,
+    borderTopWidth: 0,
   },
   letterHeader: {
     flexDirection: 'row',
@@ -508,8 +517,9 @@ const createStyles = () => StyleSheet.create({
     zIndex: 10,
   },
   pageLogo: {
-    width: 100,
-    height: 85,
+    width: 120,
+    height: 90,
+    objectFit: 'contain',
   },
   letterContent: {
     padding: 40,
@@ -597,6 +607,9 @@ const createStyles = () => StyleSheet.create({
   },
 });
 
+const PDF_DISCLAIMER_TEXT =
+  "Disclaimer: This is not a comprehensive E-invoicing assessment. This assessment only consists of about 15 questions to quickly assess a few key requirements of the E-invoicing framework. This assessment does not guarantee the detection of all existing or potential vulnerabilities and compliance gaps. It reflects the organization's compliance posture at the time of testing solely based on your responses to the assessment questions. The assessment report is intended solely for your internal use and must not be distributed, disclosed, or relied upon by third parties. RSM shall not be liable for any losses, damages, claims, or expenses arising from, or in connection with, the use of the assessment results.";
+
 // Helper function to generate PDF buffer
 async function generatePDFBuffer(
   personalInfo: PersonalInfo,
@@ -658,6 +671,10 @@ async function generatePDFBuffer(
             } catch {
               displayAnswer = answerValue || 'Not answered';
             }
+          } else if (question.responseType === 'yesno_details') {
+            displayAnswer = formatYesNoDetailsDisplay(answerValue);
+          } else if (question.responseType === 'entities') {
+            displayAnswer = formatEntitiesDisplay(answerValue);
           } else {
             // text, number, etc
             displayAnswer = answerValue || 'Not answered';
@@ -773,7 +790,10 @@ async function generatePDFBuffer(
     // First page: Assessment Summary and Assessment Details (Second page when letter section is enabled)
     const firstChunk = questionChunks[0] || [];
     const remainingChunks = questionChunks.slice(1);
-    
+    const totalPdfPages = 1 + remainingChunks.length;
+    const showDisclaimerOnPage = (pageNumber: number) =>
+      pageNumber === 3 || (totalPdfPages < 3 && pageNumber === totalPdfPages);
+
     pages.push(
       React.createElement(Page, { size: "A4", style: styles.page },
         React.createElement(View, { style: styles.pageLogoHeader },
@@ -807,19 +827,20 @@ async function generatePDFBuffer(
                 ...createQuestionRows(firstChunk, remainingChunks.length === 0)
               )
             )
-          ),
-          remainingChunks.length === 0 ? React.createElement(View, { style: styles.section },
-            React.createElement(Text, { style: styles.disclaimerTextBottom },
-              "Disclaimer: This is not a comprehensive E-invoicing assessment. This assessment only consists of about 15 questions to quickly assess a few key requirements of the E-invoicing framework. This assessment does not guarantee the detection of all existing or potential vulnerabilities and compliance gaps. It reflects the organization's compliance posture at the time of testing solely based on your responses to the assessment questions. The assessment report is intended solely for your internal use and must not be distributed, disclosed, or relied upon by third parties. RSM shall not be liable for any losses, damages, claims, or expenses arising from, or in connection with, the use of the assessment results."
+          )
+        ),
+        showDisclaimerOnPage(1)
+          ? React.createElement(View, { style: styles.pageFooterDisclaimer },
+              React.createElement(Text, { style: styles.disclaimerTextBottom }, PDF_DISCLAIMER_TEXT)
             )
-          ) : null
-        )
+          : null
       )
     );
 
     // Add remaining question pages starting from second page (first page is summary+details; when letter section is enabled, it becomes third page)
     remainingChunks.forEach((chunk, chunkIndex) => {
       const isLastChunk = chunkIndex === remainingChunks.length - 1;
+      const pageNumber = 2 + chunkIndex;
 
       pages.push(
         React.createElement(Page, { size: "A4", style: styles.page },
@@ -829,7 +850,7 @@ async function generatePDFBuffer(
               src: "https://22527425.fs1.hubspotusercontent-na2.net/hubfs/22527425/RSM-Kuwait/RSM%20Logo%20-%20Color.png"
             })
           ),
-          React.createElement(View, { style: styles.contentAreaTight },
+          React.createElement(View, { style: styles.contentAreaContinuation },
             React.createElement(View, { style: styles.section },
               React.createElement(View, { 
                 style: styles.questionsTableContainerPageBreak 
@@ -838,13 +859,13 @@ async function generatePDFBuffer(
                   ...createQuestionRows(chunk, isLastChunk)
                 )
               )
-            ),
-            isLastChunk ? React.createElement(View, { style: styles.section },
-              React.createElement(Text, { style: styles.disclaimerTextBottom },
-                "Disclaimer: This is not a comprehensive E-invoicing assessment. This assessment only consists of about 15 questions to quickly assess a few key requirements of the E-invoicing framework. This assessment does not guarantee the detection of all existing or potential vulnerabilities and compliance gaps. It reflects the organization's compliance posture at the time of testing solely based on your responses to the assessment questions. The assessment report is intended solely for your internal use and must not be distributed, disclosed, or relied upon by third parties. RSM shall not be liable for any losses, damages, claims, or expenses arising from, or in connection with, the use of the assessment results."
+            )
+          ),
+          showDisclaimerOnPage(pageNumber)
+            ? React.createElement(View, { style: styles.pageFooterDisclaimer },
+                React.createElement(Text, { style: styles.disclaimerTextBottom }, PDF_DISCLAIMER_TEXT)
               )
-            ) : null
-          )
+            : null
         )
       );
     });
@@ -1015,6 +1036,14 @@ function formatAnswerForSheet(
     } catch {
       return answerValue;
     }
+  }
+
+  if (question.responseType === "yesno_details") {
+    return formatYesNoDetailsDisplay(answerValue);
+  }
+
+  if (question.responseType === "entities") {
+    return formatEntitiesDisplay(answerValue);
   }
 
   // text, number, etc.
@@ -1377,6 +1406,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                     } catch {
                       displayAnswer = answerValue as string;
                     }
+                  } else if (question.responseType === 'yesno_details') {
+                    displayAnswer = formatYesNoDetailsDisplay(answerValue as string);
+                  } else if (question.responseType === 'entities') {
+                    displayAnswer = formatEntitiesDisplay(answerValue as string);
+                  } else if (question.responseType === 'multiselect') {
+                    const selectedValues = (answerValue as string).split(',').map((v) => v.trim()).filter(Boolean);
+                    displayAnswer = selectedValues
+                      .map((val) => question.options?.find((opt) => opt.value === val)?.label || val)
+                      .join(', ') || 'Not answered';
                   } else {
                     displayAnswer = answerValue as string || 'Not answered';
                   }
@@ -1672,7 +1710,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     try {
       const internalEmailResult = await transporter.sendMail({
         from: process.env.FROM_EMAIL,
-        to: "arpit.m@nexuses.in,anisha.a@nexuses.in,e-invoice-inquiry@rsm.ae",
+        to: "e-invoice-inquiry@rsm.ae",
         replyTo: 'e-invoice-inquiry@rsm.ae',
         subject: "E-Invoicing Assessment - UAE",
         html: emailContent,
