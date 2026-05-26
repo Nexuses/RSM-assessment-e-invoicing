@@ -610,6 +610,11 @@ const createStyles = () => StyleSheet.create({
 const PDF_DISCLAIMER_TEXT =
   "Disclaimer: This is not a comprehensive E-invoicing assessment. This assessment only consists of about 15 questions to quickly assess a few key requirements of the E-invoicing framework. This assessment does not guarantee the detection of all existing or potential vulnerabilities and compliance gaps. It reflects the organization's compliance posture at the time of testing solely based on your responses to the assessment questions. The assessment report is intended solely for your internal use and must not be distributed, disclosed, or relied upon by third parties. RSM shall not be liable for any losses, damages, claims, or expenses arising from, or in connection with, the use of the assessment results.";
 
+const PDF_COVER_PAGE_IMAGE =
+  "https://nexuses.s3.us-east-2.amazonaws.com/RSM_E-invoicing_Assessment_Tool_front_and_last_page.png";
+const PDF_BACK_PAGE_IMAGE =
+  "https://nexuses.s3.us-east-2.amazonaws.com/RSM_E-invoicing_Assessment_Tool_front_and_last_page__1_.png";
+
 // Helper function to generate PDF buffer
 async function generatePDFBuffer(
   personalInfo: PersonalInfo,
@@ -702,6 +707,13 @@ async function generatePDFBuffer(
     };
 
     const pages = [];
+
+    const createFullPageImage = (imageSrc: string) =>
+      React.createElement(Page, { size: "A4", style: styles.page },
+        React.createElement(View, { style: styles.fullPageImageContainer },
+          React.createElement(Image, { style: styles.fullPageImage, src: imageSrc })
+        )
+      );
     
     // Second page: Letter format - COMMENTED OUT FOR NOW (will be added back later)
     /*
@@ -787,12 +799,14 @@ async function generatePDFBuffer(
     );
     */
 
-    // First page: Assessment Summary and Assessment Details (Second page when letter section is enabled)
+    // Full-page cover, then assessment content, then full-page back cover
     const firstChunk = questionChunks[0] || [];
     const remainingChunks = questionChunks.slice(1);
-    const totalPdfPages = 1 + remainingChunks.length;
-    const showDisclaimerOnPage = (pageNumber: number) =>
-      pageNumber === 3 || (totalPdfPages < 3 && pageNumber === totalPdfPages);
+    const contentPageCount = 1 + remainingChunks.length;
+    const showDisclaimerOnContentPage = (contentPageIndex: number) =>
+      contentPageIndex === 2 || (contentPageCount < 3 && contentPageIndex === contentPageCount - 1);
+
+    pages.push(createFullPageImage(PDF_COVER_PAGE_IMAGE));
 
     pages.push(
       React.createElement(Page, { size: "A4", style: styles.page },
@@ -829,7 +843,7 @@ async function generatePDFBuffer(
             )
           )
         ),
-        showDisclaimerOnPage(1)
+        showDisclaimerOnContentPage(0)
           ? React.createElement(View, { style: styles.pageFooterDisclaimer },
               React.createElement(Text, { style: styles.disclaimerTextBottom }, PDF_DISCLAIMER_TEXT)
             )
@@ -837,10 +851,10 @@ async function generatePDFBuffer(
       )
     );
 
-    // Add remaining question pages starting from second page (first page is summary+details; when letter section is enabled, it becomes third page)
+    // Continuation pages (assessment details tables)
     remainingChunks.forEach((chunk, chunkIndex) => {
       const isLastChunk = chunkIndex === remainingChunks.length - 1;
-      const pageNumber = 2 + chunkIndex;
+      const contentPageIndex = 1 + chunkIndex;
 
       pages.push(
         React.createElement(Page, { size: "A4", style: styles.page },
@@ -861,7 +875,7 @@ async function generatePDFBuffer(
               )
             )
           ),
-          showDisclaimerOnPage(pageNumber)
+          showDisclaimerOnContentPage(contentPageIndex)
             ? React.createElement(View, { style: styles.pageFooterDisclaimer },
                 React.createElement(Text, { style: styles.disclaimerTextBottom }, PDF_DISCLAIMER_TEXT)
               )
@@ -869,6 +883,8 @@ async function generatePDFBuffer(
         )
       );
     });
+
+    pages.push(createFullPageImage(PDF_BACK_PAGE_IMAGE));
 
     return React.createElement(Document, {}, ...pages);
   };
