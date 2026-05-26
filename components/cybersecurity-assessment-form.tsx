@@ -43,6 +43,7 @@ import { computeAssessment, type AssessmentResult } from "@/lib/scoring";
 import {
   createEmptyEntity,
   getEntitiesList,
+  parseEntities,
   stringifyEntities,
   FTA_PILOT_OPTIONS,
   TURNOVER_BAND_OPTIONS,
@@ -140,6 +141,20 @@ export function CybersecurityAssessmentForm() {
     };
   }, [isConsultationModalOpen]);
 
+  // Question 9 (q8): centralized invoicing → question 10 allows only one entity
+  useEffect(() => {
+    const currentQ = assessmentQuestions[currentQuestion - 1];
+    if (currentQ?.id !== "q9_entities" || answers.q8 !== "0") return;
+
+    const entities = parseEntities(answers.q9_entities || "");
+    if (entities && entities.length > 1) {
+      setAnswers((prev) => ({
+        ...prev,
+        q9_entities: stringifyEntities([entities[0]]),
+      }));
+    }
+  }, [currentQuestion, answers.q8, answers.q9_entities, assessmentQuestions]);
+
   const consultationSchema = z.object({
     firstName: z.string().min(2, { message: "Please enter a valid first name." }),
     lastName: z.string().min(2, { message: "Please enter a valid last name." }),
@@ -195,7 +210,19 @@ export function CybersecurityAssessmentForm() {
   };
 
   const handleAnswerChange = (questionId: string, value: string) => {
-    const updatedAnswers = { ...answers, [questionId]: value };
+    let updatedAnswers = { ...answers, [questionId]: value };
+
+    // Centralized invoicing (q8 = No): only one entity allowed on the next step
+    if (questionId === "q8" && value === "0" && updatedAnswers.q9_entities) {
+      const entities = parseEntities(updatedAnswers.q9_entities);
+      if (entities && entities.length > 1) {
+        updatedAnswers = {
+          ...updatedAnswers,
+          q9_entities: stringifyEntities([entities[0]]),
+        };
+      }
+    }
+
     setAnswers(updatedAnswers);
     
     // Get current question to check response type
@@ -988,10 +1015,16 @@ export function CybersecurityAssessmentForm() {
                     
                     // Render based on response type
                     if (currentQ.responseType === 'entities') {
-                      const entityList = getEntitiesList(currentAnswer);
+                      const isCentralizedInvoicing = answers.q8 === "0";
+                      const entityList = isCentralizedInvoicing
+                        ? getEntitiesList(currentAnswer).slice(0, 1)
+                        : getEntitiesList(currentAnswer);
 
                       const updateEntities = (entities: EntityRecord[]) => {
-                        handleAnswerChange(currentQ.id, stringifyEntities(entities));
+                        const nextEntities = isCentralizedInvoicing
+                          ? entities.slice(0, 1)
+                          : entities;
+                        handleAnswerChange(currentQ.id, stringifyEntities(nextEntities));
                       };
 
                       const updateEntityAt = (
@@ -1151,15 +1184,17 @@ export function CybersecurityAssessmentForm() {
                               </div>
                             </div>
                           ))}
-                          <Button
-                            type="button"
-                            variant="outline"
-                            onClick={addEntity}
-                            className="h-12 w-full rounded-2xl border-2 border-dashed border-[#3F9C35] bg-[#f0fbf4] text-sm font-semibold text-[#3F9C35] hover:bg-[#e6f5ed]"
-                          >
-                            <Plus className="mr-2 h-4 w-4" />
-                            Add another entity
-                          </Button>
+                          {!isCentralizedInvoicing && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              onClick={addEntity}
+                              className="h-12 w-full rounded-2xl border-2 border-dashed border-[#3F9C35] bg-[#f0fbf4] text-sm font-semibold text-[#3F9C35] hover:bg-[#e6f5ed]"
+                            >
+                              <Plus className="mr-2 h-4 w-4" />
+                              Add another entity
+                            </Button>
+                          )}
                         </div>
                       );
                     } else if (currentQ.responseType === 'yesno_details') {
