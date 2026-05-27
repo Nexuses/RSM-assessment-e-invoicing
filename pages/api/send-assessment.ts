@@ -613,9 +613,9 @@ const PDF_DISCLAIMER_TEXT =
   "Disclaimer: This is not a comprehensive E-invoicing assessment. This assessment only consists of about 15 questions to quickly assess a few key requirements of the E-invoicing framework. This assessment does not guarantee the detection of all existing or potential vulnerabilities and compliance gaps. It reflects the organization's compliance posture at the time of testing solely based on your responses to the assessment questions. The assessment report is intended solely for your internal use and must not be distributed, disclosed, or relied upon by third parties. RSM shall not be liable for any losses, damages, claims, or expenses arising from, or in connection with, the use of the assessment results.";
 
 const PDF_COVER_PAGE_IMAGE =
-  "https://nexuses.s3.us-east-2.amazonaws.com/RSM_E-invoicing_Assessment_Tool_front_and_last_page.png";
+  "https://nexuses.s3.us-east-2.amazonaws.com/RSME-invoicingAssessmentToolfrontandlastpage21.jpeg";
 const PDF_BACK_PAGE_IMAGE =
-  "https://nexuses.s3.us-east-2.amazonaws.com/RSM_E-invoicing_Assessment_Tool_front_and_last_page__1_.png";
+  "https://nexuses.s3.us-east-2.amazonaws.com/RSM_E-invoicing_Assessment_Tool_front_and_last_page__1___1_.png";
 
 // Helper function to generate PDF buffer
 async function generatePDFBuffer(
