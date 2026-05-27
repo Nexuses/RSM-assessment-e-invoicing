@@ -6,6 +6,8 @@ import { questionsData } from '@/lib/questions';
 import { computeAssessment } from '@/lib/scoring';
 import { formatEntitiesDisplay } from '@/lib/entities';
 import { formatYesNoDetailsDisplay } from '@/lib/yesno-details';
+import { formatSelectOtherDisplay } from '@/lib/select-other';
+import { formatSelectCountriesDisplay } from '@/lib/select-countries';
 import { google } from 'googleapis';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 
@@ -656,7 +658,11 @@ async function generatePDFBuffer(
         let displayAnswer = '';
 
         if (question) {
-          if (question.responseType === 'yesno' || question.responseType === 'select') {
+          if (question.responseType === 'select_other') {
+            displayAnswer = formatSelectOtherDisplay(answerValue, question.options);
+          } else if (question.responseType === 'select_countries') {
+            displayAnswer = formatSelectCountriesDisplay(answerValue, question.options);
+          } else if (question.responseType === 'yesno' || question.responseType === 'select') {
             const answer = question.options?.find((opt) => opt.value === answerValue);
             displayAnswer = answer?.label || answerValue || 'Not answered';
           } else if (question.responseType === 'multiselect') {
@@ -677,7 +683,10 @@ async function generatePDFBuffer(
               displayAnswer = answerValue || 'Not answered';
             }
           } else if (question.responseType === 'yesno_details') {
-            displayAnswer = formatYesNoDetailsDisplay(answerValue);
+            displayAnswer = formatYesNoDetailsDisplay(
+              answerValue,
+              question.detailsKind ?? 'countries',
+            );
           } else if (question.responseType === 'entities') {
             displayAnswer = formatEntitiesDisplay(answerValue);
           } else {
@@ -1028,6 +1037,14 @@ function formatAnswerForSheet(
 ): string {
   if (!answerValue) return "";
 
+  if (question.responseType === "select_other") {
+    return formatSelectOtherDisplay(answerValue, question.options);
+  }
+
+  if (question.responseType === "select_countries") {
+    return formatSelectCountriesDisplay(answerValue, question.options);
+  }
+
   if (question.responseType === "yesno" || question.responseType === "select") {
     const answer = question.options?.find((opt) => opt.value === answerValue);
     return answer ? answer.label : answerValue;
@@ -1055,7 +1072,7 @@ function formatAnswerForSheet(
   }
 
   if (question.responseType === "yesno_details") {
-    return formatYesNoDetailsDisplay(answerValue);
+    return formatYesNoDetailsDisplay(answerValue, question.detailsKind ?? 'countries');
   }
 
   if (question.responseType === "entities") {
@@ -1407,7 +1424,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 let displayAnswer = '';
                 
                 if (question) {
-                  if (question.responseType === 'yesno' || question.responseType === 'select') {
+                  if (question.responseType === 'select_other') {
+                    displayAnswer = formatSelectOtherDisplay(
+                      answerValue as string,
+                      question.options,
+                    );
+                  } else if (question.responseType === 'select_countries') {
+                    displayAnswer = formatSelectCountriesDisplay(
+                      answerValue as string,
+                      question.options,
+                    );
+                  } else if (question.responseType === 'yesno' || question.responseType === 'select') {
                     const answer = question.options?.find(opt => opt.value === answerValue);
                     displayAnswer = answer?.label || answerValue || 'Not answered';
                   } else if (question.responseType === 'ynlist') {
@@ -1423,7 +1450,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                       displayAnswer = answerValue as string;
                     }
                   } else if (question.responseType === 'yesno_details') {
-                    displayAnswer = formatYesNoDetailsDisplay(answerValue as string);
+                    displayAnswer = formatYesNoDetailsDisplay(
+                      answerValue as string,
+                      question.detailsKind ?? 'countries',
+                    );
                   } else if (question.responseType === 'entities') {
                     displayAnswer = formatEntitiesDisplay(answerValue as string);
                   } else if (question.responseType === 'multiselect') {

@@ -5,6 +5,8 @@ export type ResponseType =
   | 'text'
   | 'number'
   | 'select'
+  | 'select_other'
+  | 'select_countries'
   | 'multiselect'
   | 'ynlist';
 
@@ -21,6 +23,8 @@ export type Question = {
     max?: number;
     pattern?: string;
   };
+  /** For yesno_details: label and validation for follow-up list fields */
+  detailsKind?: 'countries' | 'branches';
 };
 
 export const questionsData: Question[] = [
@@ -106,33 +110,13 @@ export const questionsData: Question[] = [
     id: 'q9',
     text: 'Do you require e-invoicing compliance for countries other than the UAE?',
     subject: 'Part 2: Volume & Scope',
-    responseType: 'select',
+    responseType: 'select_countries',
     options: [
       { value: 'uae_only', label: 'No, UAE only' },
       { value: 'ksa', label: 'Yes, KSA (ZATCA)' },
       { value: 'global', label: 'Yes, other Global mandates' },
     ],
-  },
-  {
-    id: 'q9_10',
-    text: 'Do you have e-invoicing requirements in other countries?',
-    subject: 'Part 2: Volume & Scope',
-    responseType: 'yesno_details',
-    options: [
-      { value: '1', label: 'Yes' },
-      { value: '0', label: 'No' },
-    ],
-    placeholder: 'Enter country names',
-  },
-  {
-    id: 'q8',
-    text: 'Do you issue invoices from multiple locations or branches?',
-    subject: 'Part 2: Volume & Scope',
-    responseType: 'yesno',
-    options: [
-      { value: '0', label: 'No, centralized invoicing' },
-      { value: '1', label: 'Yes, multiple branches issuing independently' },
-    ],
+    placeholder: 'Enter country name',
   },
   {
     id: 'q9_entities',
@@ -141,11 +125,30 @@ export const questionsData: Question[] = [
     responseType: 'entities',
   },
   {
-    id: 'q9_7',
-    text: 'Which ERP or invoicing systems are currently used?',
-    subject: 'Part 2A: Additional Implementation Inputs',
-    responseType: 'text',
-    placeholder: 'List ERP and invoicing systems in use',
+    id: 'q8',
+    text: 'Do you issue invoices from multiple locations or branches?',
+    subject: 'Part 2: Volume & Scope',
+    responseType: 'yesno_details',
+    detailsKind: 'branches',
+    options: [
+      { value: '0', label: 'No, centralized invoicing' },
+      { value: '1', label: 'Yes, multiple branches issuing independently' },
+    ],
+    placeholder: 'Enter branch name or location',
+  },
+  {
+    id: 'q10',
+    text: 'Which ERP or Accounting Software do you currently use?',
+    subject: 'Part 3: Technical Readiness',
+    responseType: 'select_other',
+    options: [
+      { value: 'tier1', label: 'Tier 1: SAP / Oracle / Microsoft Dynamics' },
+      { value: 'tier2', label: 'Tier 2/Cloud: Sage / Zoho / QuickBooks / Xero' },
+      { value: 'custom', label: 'Legacy/Custom-built ERP' },
+      { value: 'manual', label: 'Manual: Excel / Word' },
+      { value: 'other', label: 'Other' },
+    ],
+    placeholder: 'Specify ERP or accounting software',
   },
   {
     id: 'q9_8',
@@ -166,18 +169,6 @@ export const questionsData: Question[] = [
     options: [
       { value: 'full_integration', label: 'Full integration' },
       { value: 'dashboard_manual', label: 'Dashboard only (manual entry)' },
-    ],
-  },
-  {
-    id: 'q10',
-    text: 'Which ERP or Accounting Software do you currently use?',
-    subject: 'Part 3: Technical Readiness',
-    responseType: 'select',
-    options: [
-      { value: 'tier1', label: 'Tier 1: SAP / Oracle / Microsoft Dynamics' },
-      { value: 'tier2', label: 'Tier 2/Cloud: Sage / Zoho / QuickBooks / Xero' },
-      { value: 'custom', label: 'Legacy/Custom-built ERP' },
-      { value: 'manual', label: 'Manual: Excel / Word' },
     ],
   },
   {

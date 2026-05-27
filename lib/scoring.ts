@@ -206,10 +206,29 @@ export function computeAssessment(answers: Record<string, string>): AssessmentRe
     }
   })();
 
-  const q8 = answers.q8 === '1' ? 3 : 0;
+  const q8 = (() => {
+    const raw = answers.q8;
+    if (raw === '1') return 3;
+    if (raw === '0') return 0;
+    try {
+      const parsed = JSON.parse(raw) as { choice?: string };
+      if (parsed.choice === '1') return 3;
+    } catch {
+      // legacy plain value
+    }
+    return 0;
+  })();
 
   const q9 = (() => {
-    switch (answers.q9) {
+    const raw = answers.q9;
+    let value = raw;
+    try {
+      const parsed = JSON.parse(raw) as { value?: string };
+      if (parsed.value) value = parsed.value;
+    } catch {
+      // plain value
+    }
+    switch (value) {
       case 'uae_only':
         return 0;
       case 'ksa':
@@ -221,12 +240,21 @@ export function computeAssessment(answers: Record<string, string>): AssessmentRe
   })();
 
   const q10 = (() => {
-    switch (answers.q10) {
+    const raw = answers.q10;
+    let value = raw;
+    try {
+      const parsed = JSON.parse(raw) as { value?: string };
+      if (parsed.value) value = parsed.value;
+    } catch {
+      // plain value
+    }
+    switch (value) {
       case 'tier1':
         return 3;
       case 'tier2':
         return 1;
       case 'custom':
+      case 'other':
         return 8;
       case 'manual':
         return 15;

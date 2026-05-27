@@ -56,6 +56,18 @@ import {
   parseYesNoDetails,
   stringifyYesNoDetails,
 } from "@/lib/yesno-details";
+import {
+  hasSelectOtherText,
+  parseSelectOther,
+  stringifySelectOther,
+} from "@/lib/select-other";
+import {
+  getCountriesListForSelect,
+  hasAtLeastOneSelectCountry,
+  parseSelectCountries,
+  selectCountriesNeedsList,
+  stringifySelectCountries,
+} from "@/lib/select-countries";
 
 // Add this near the top of the file, before the component
 const BLOCKED_EMAIL_DOMAINS = [
@@ -141,10 +153,10 @@ export function CybersecurityAssessmentForm() {
     };
   }, [isConsultationModalOpen]);
 
-  // Question 9 (q8): centralized invoicing → question 10 allows only one entity
+  // Question 6 (q7): single entity → question 10 allows only one entity card
   useEffect(() => {
     const currentQ = assessmentQuestions[currentQuestion - 1];
-    if (currentQ?.id !== "q9_entities" || answers.q8 !== "0") return;
+    if (currentQ?.id !== "q9_entities" || answers.q7 !== "single_trn") return;
 
     const entities = parseEntities(answers.q9_entities || "");
     if (entities && entities.length > 1) {
@@ -153,7 +165,7 @@ export function CybersecurityAssessmentForm() {
         q9_entities: stringifyEntities([entities[0]]),
       }));
     }
-  }, [currentQuestion, answers.q8, answers.q9_entities, assessmentQuestions]);
+  }, [currentQuestion, answers.q7, answers.q9_entities, assessmentQuestions]);
 
   const consultationSchema = z.object({
     firstName: z.string().min(2, { message: "Please enter a valid first name." }),
@@ -212,8 +224,8 @@ export function CybersecurityAssessmentForm() {
   const handleAnswerChange = (questionId: string, value: string) => {
     let updatedAnswers = { ...answers, [questionId]: value };
 
-    // Centralized invoicing (q8 = No): only one entity allowed on the next step
-    if (questionId === "q8" && value === "0" && updatedAnswers.q9_entities) {
+    // Question 6 (q7): single entity only — trim entities if user changes selection
+    if (questionId === "q7" && value === "single_trn" && updatedAnswers.q9_entities) {
       const entities = parseEntities(updatedAnswers.q9_entities);
       if (entities && entities.length > 1) {
         updatedAnswers = {
@@ -355,11 +367,15 @@ export function CybersecurityAssessmentForm() {
       if (currentQ.responseType === 'yesno_details') {
         const details = parseYesNoDetails(currentAnswer);
         if (!details?.choice) {
-          setFormErrors(["Please select Yes or No."]);
+          setFormErrors(["Please select an option."]);
           return;
         }
         if (details.choice === '1' && !hasAtLeastOneCountry(details)) {
-          setFormErrors(["Please specify at least one country."]);
+          setFormErrors([
+            currentQ.detailsKind === 'branches'
+              ? 'Please specify at least one branch.'
+              : 'Please specify at least one country.',
+          ]);
           return;
         }
       }
@@ -368,6 +384,34 @@ export function CybersecurityAssessmentForm() {
         const entityError = validateEntities(currentAnswer);
         if (entityError) {
           setFormErrors([entityError]);
+          return;
+        }
+      }
+
+      if (currentQ.responseType === 'select_other') {
+        const parsed = parseSelectOther(currentAnswer);
+        if (!parsed?.value) {
+          setFormErrors(['Please select an option.']);
+          return;
+        }
+        if (!hasSelectOtherText(currentAnswer)) {
+          setFormErrors(['Please specify your ERP or accounting software.']);
+          return;
+        }
+      }
+
+      if (currentQ.responseType === 'select_countries') {
+        const parsed = parseSelectCountries(currentAnswer);
+        if (!parsed?.value) {
+          setFormErrors(['Please select an option.']);
+          return;
+        }
+        if (!hasAtLeastOneSelectCountry(currentAnswer)) {
+          setFormErrors([
+            parsed.value === 'ksa'
+              ? 'Please specify at least one country for KSA.'
+              : 'Please specify at least one country.',
+          ]);
           return;
         }
       }
@@ -420,11 +464,15 @@ export function CybersecurityAssessmentForm() {
       if (currentQ.responseType === 'yesno_details') {
         const details = parseYesNoDetails(currentAnswer);
         if (!details?.choice) {
-          setFormErrors(["Please select Yes or No."]);
+          setFormErrors(["Please select an option."]);
           return;
         }
         if (details.choice === '1' && !hasAtLeastOneCountry(details)) {
-          setFormErrors(["Please specify at least one country."]);
+          setFormErrors([
+            currentQ.detailsKind === 'branches'
+              ? 'Please specify at least one branch.'
+              : 'Please specify at least one country.',
+          ]);
           return;
         }
       }
@@ -433,6 +481,34 @@ export function CybersecurityAssessmentForm() {
         const entityError = validateEntities(currentAnswer);
         if (entityError) {
           setFormErrors([entityError]);
+          return;
+        }
+      }
+
+      if (currentQ.responseType === 'select_other') {
+        const parsed = parseSelectOther(currentAnswer);
+        if (!parsed?.value) {
+          setFormErrors(['Please select an option.']);
+          return;
+        }
+        if (!hasSelectOtherText(currentAnswer)) {
+          setFormErrors(['Please specify your ERP or accounting software.']);
+          return;
+        }
+      }
+
+      if (currentQ.responseType === 'select_countries') {
+        const parsed = parseSelectCountries(currentAnswer);
+        if (!parsed?.value) {
+          setFormErrors(['Please select an option.']);
+          return;
+        }
+        if (!hasAtLeastOneSelectCountry(currentAnswer)) {
+          setFormErrors([
+            parsed.value === 'ksa'
+              ? 'Please specify at least one country for KSA.'
+              : 'Please specify at least one country.',
+          ]);
           return;
         }
       }
@@ -1015,15 +1091,16 @@ export function CybersecurityAssessmentForm() {
                     
                     // Render based on response type
                     if (currentQ.responseType === 'entities') {
-                      const isCentralizedInvoicing = answers.q8 === "0";
-                      const entityList = isCentralizedInvoicing
-                        ? getEntitiesList(currentAnswer).slice(0, 1)
-                        : getEntitiesList(currentAnswer);
+                      const allowMultipleEntities =
+                        answers.q7 === "multiple_trn" || answers.q7 === "tax_group";
+                      const entityList = allowMultipleEntities
+                        ? getEntitiesList(currentAnswer)
+                        : getEntitiesList(currentAnswer).slice(0, 1);
 
                       const updateEntities = (entities: EntityRecord[]) => {
-                        const nextEntities = isCentralizedInvoicing
-                          ? entities.slice(0, 1)
-                          : entities;
+                        const nextEntities = allowMultipleEntities
+                          ? entities
+                          : entities.slice(0, 1);
                         handleAnswerChange(currentQ.id, stringifyEntities(nextEntities));
                       };
 
@@ -1184,7 +1261,7 @@ export function CybersecurityAssessmentForm() {
                               </div>
                             </div>
                           ))}
-                          {!isCentralizedInvoicing && (
+                          {allowMultipleEntities && (
                             <Button
                               type="button"
                               variant="outline"
@@ -1303,14 +1380,168 @@ export function CybersecurityAssessmentForm() {
                           {selectedChoice === '1' && (
                             <div className="mt-2 space-y-3">
                               <Label className="block text-sm font-semibold text-[#1b3a57]">
-                                Specify countries
+                                {currentQ.detailsKind === 'branches'
+                                  ? 'Specify branches'
+                                  : 'Specify countries'}
                               </Label>
                               {countryList.map((country, index) => (
                                 <div key={index} className="flex items-center gap-2">
                                   <Input
                                     value={country}
                                     onChange={(e) => updateCountryAt(index, e.target.value)}
-                                    placeholder={currentQ.placeholder || 'Enter country name'}
+                                    placeholder={
+                                      currentQ.placeholder ||
+                                      (currentQ.detailsKind === 'branches'
+                                        ? 'Enter branch name or location'
+                                        : 'Enter country name')
+                                    }
+                                    className="h-12 flex-1 rounded-xl border-gray-200 bg-white text-base focus-visible:ring-2 focus-visible:ring-[#00AEEF]"
+                                  />
+                                  {countryList.length > 1 && (
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      onClick={() => removeCountry(index)}
+                                      className="h-12 w-12 shrink-0 rounded-xl border-gray-200 p-0"
+                                      aria-label={
+                                        currentQ.detailsKind === 'branches'
+                                          ? 'Remove branch'
+                                          : 'Remove country'
+                                      }
+                                    >
+                                      <X className="h-4 w-4" />
+                                    </Button>
+                                  )}
+                                </div>
+                              ))}
+                              <Button
+                                type="button"
+                                variant="outline"
+                                onClick={addCountry}
+                                className="h-11 w-full rounded-full border-[#00AEEF] text-sm font-semibold text-[#00AEEF] hover:bg-[#e6f5fc]"
+                              >
+                                <Plus className="mr-2 h-4 w-4" />
+                                {currentQ.detailsKind === 'branches'
+                                  ? 'Add another branch'
+                                  : 'Add another country'}
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    } else if (currentQ.responseType === 'select_countries') {
+                      const parsed = parseSelectCountries(currentAnswer);
+                      const selectedValue = parsed?.value ?? '';
+                      const countryList = getCountriesListForSelect(parsed);
+
+                      const updateSelectCountries = (
+                        value: string,
+                        countries?: string[],
+                      ) => {
+                        handleAnswerChange(
+                          currentQ.id,
+                          stringifySelectCountries({
+                            value,
+                            countries: selectCountriesNeedsList(value)
+                              ? countries ?? ['']
+                              : [],
+                          }),
+                        );
+                      };
+
+                      const updateCountryAt = (index: number, text: string) => {
+                        const next = [...countryList];
+                        next[index] = text;
+                        updateSelectCountries(selectedValue, next);
+                      };
+
+                      const addCountry = () => {
+                        updateSelectCountries(selectedValue, [...countryList, '']);
+                      };
+
+                      const removeCountry = (index: number) => {
+                        if (countryList.length <= 1) return;
+                        updateSelectCountries(
+                          selectedValue,
+                          countryList.filter((_, i) => i !== index),
+                        );
+                      };
+
+                      return (
+                        <div className="flex flex-col gap-4">
+                          {currentQ.options?.map((option) => {
+                            const id = `${currentQ.id}-${option.value}`;
+                            const isSelected = selectedValue === option.value;
+                            return (
+                              <div key={option.value} className="flex-1">
+                                <input
+                                  type="radio"
+                                  id={id}
+                                  name={currentQ.id}
+                                  value={option.value}
+                                  checked={isSelected}
+                                  onChange={() =>
+                                    updateSelectCountries(
+                                      option.value,
+                                      selectCountriesNeedsList(option.value)
+                                        ? option.value === selectedValue
+                                          ? countryList
+                                          : ['']
+                                        : [],
+                                    )
+                                  }
+                                  className="sr-only"
+                                />
+                                <Label
+                                  htmlFor={id}
+                                  className={cn(
+                                    'flex w-full items-center gap-4 rounded-2xl border bg-white px-5 py-4 text-sm font-medium text-gray-700 shadow-sm transition-all focus:outline-none cursor-pointer',
+                                    isSelected &&
+                                      'border-[#00AEEF] bg-gradient-to-r from-[#00AEEF] to-[#0091cf] text-white shadow-[0_12px_30px_rgba(0,174,239,0.22)]',
+                                  )}
+                                >
+                                  <span
+                                    className={cn(
+                                      'flex h-6 w-6 items-center justify-center rounded-full border-2 border-gray-300 transition-colors',
+                                      isSelected && 'border-white bg-white',
+                                    )}
+                                  >
+                                    <Check
+                                      className={cn(
+                                        'h-3.5 w-3.5 text-[#00AEEF] transition-opacity',
+                                        isSelected ? 'opacity-100' : 'opacity-0',
+                                      )}
+                                    />
+                                  </span>
+                                  <span
+                                    className={cn(
+                                      'flex-1 text-left',
+                                      isSelected && 'text-white font-semibold',
+                                    )}
+                                  >
+                                    {option.label}
+                                  </span>
+                                </Label>
+                              </div>
+                            );
+                          })}
+                          {selectCountriesNeedsList(selectedValue) && (
+                            <div className="mt-2 space-y-3">
+                              <Label className="block text-sm font-semibold text-[#1b3a57]">
+                                {selectedValue === 'ksa'
+                                  ? 'Specify countries (KSA)'
+                                  : 'Specify countries (global)'}
+                              </Label>
+                              {countryList.map((country, index) => (
+                                <div key={index} className="flex items-center gap-2">
+                                  <Input
+                                    value={country}
+                                    onChange={(e) =>
+                                      updateCountryAt(index, e.target.value)
+                                    }
+                                    placeholder={
+                                      currentQ.placeholder || 'Enter country name'
+                                    }
                                     className="h-12 flex-1 rounded-xl border-gray-200 bg-white text-base focus-visible:ring-2 focus-visible:ring-[#00AEEF]"
                                   />
                                   {countryList.length > 1 && (
@@ -1335,6 +1566,96 @@ export function CybersecurityAssessmentForm() {
                                 <Plus className="mr-2 h-4 w-4" />
                                 Add another country
                               </Button>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    } else if (currentQ.responseType === 'select_other') {
+                      const parsed = parseSelectOther(currentAnswer);
+                      const selectedValue = parsed?.value ?? '';
+                      const otherText =
+                        selectedValue === 'other' ? (parsed?.other ?? '') : '';
+
+                      const updateSelectOther = (value: string, other?: string) => {
+                        handleAnswerChange(
+                          currentQ.id,
+                          stringifySelectOther({
+                            value,
+                            other: value === 'other' ? other : undefined,
+                          }),
+                        );
+                      };
+
+                      return (
+                        <div className="flex flex-col gap-4">
+                          {currentQ.options?.map((option) => {
+                            const id = `${currentQ.id}-${option.value}`;
+                            const isSelected = selectedValue === option.value;
+                            return (
+                              <div key={option.value} className="flex-1">
+                                <input
+                                  type="radio"
+                                  id={id}
+                                  name={currentQ.id}
+                                  value={option.value}
+                                  checked={isSelected}
+                                  onChange={() =>
+                                    updateSelectOther(
+                                      option.value,
+                                      option.value === 'other' ? otherText : undefined,
+                                    )
+                                  }
+                                  className="sr-only"
+                                />
+                                <Label
+                                  htmlFor={id}
+                                  className={cn(
+                                    'flex w-full items-center gap-4 rounded-2xl border bg-white px-5 py-4 text-sm font-medium text-gray-700 shadow-sm transition-all focus:outline-none cursor-pointer',
+                                    isSelected &&
+                                      'border-[#00AEEF] bg-gradient-to-r from-[#00AEEF] to-[#0091cf] text-white shadow-[0_12px_30px_rgba(0,174,239,0.22)]',
+                                  )}
+                                >
+                                  <span
+                                    className={cn(
+                                      'flex h-6 w-6 items-center justify-center rounded-full border-2 border-gray-300 transition-colors',
+                                      isSelected && 'border-white bg-white',
+                                    )}
+                                  >
+                                    <Check
+                                      className={cn(
+                                        'h-3.5 w-3.5 text-[#00AEEF] transition-opacity',
+                                        isSelected ? 'opacity-100' : 'opacity-0',
+                                      )}
+                                    />
+                                  </span>
+                                  <span
+                                    className={cn(
+                                      'flex-1 text-left',
+                                      isSelected && 'text-white font-semibold',
+                                    )}
+                                  >
+                                    {option.label}
+                                  </span>
+                                </Label>
+                              </div>
+                            );
+                          })}
+                          {selectedValue === 'other' && (
+                            <div className="mt-2">
+                              <Label className="mb-2 block text-sm font-semibold text-[#1b3a57]">
+                                Please specify
+                              </Label>
+                              <Input
+                                value={otherText}
+                                onChange={(e) =>
+                                  updateSelectOther('other', e.target.value)
+                                }
+                                placeholder={
+                                  currentQ.placeholder ||
+                                  'Specify ERP or accounting software'
+                                }
+                                className="h-12 rounded-xl border-gray-200 bg-white text-base focus-visible:ring-2 focus-visible:ring-[#00AEEF]"
+                              />
                             </div>
                           )}
                         </div>

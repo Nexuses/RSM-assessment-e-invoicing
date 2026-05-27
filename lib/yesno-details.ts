@@ -50,10 +50,20 @@ export function hasAtLeastOneCountry(details: YesNoDetailsAnswer | null): boolea
   return (details.countries ?? []).some((c) => c.trim().length > 0);
 }
 
-export function formatYesNoDetailsDisplay(value: string): string {
+export function formatYesNoDetailsDisplay(
+  value: string,
+  detailsKind: 'countries' | 'branches' = 'countries',
+): string {
   const parsed = parseYesNoDetails(value);
   if (!parsed) return value || 'Not answered';
-  if (parsed.choice === '0') return 'No';
-  const countries = (parsed.countries ?? []).map((c) => c.trim()).filter(Boolean);
-  return countries.length > 0 ? `Yes — ${countries.join(', ')}` : 'Yes';
+  if (parsed.choice === '0') {
+    return detailsKind === 'branches' ? 'No, centralized invoicing' : 'No';
+  }
+  const items = (parsed.countries ?? []).map((c) => c.trim()).filter(Boolean);
+  if (detailsKind === 'branches') {
+    return items.length > 0
+      ? `Yes, multiple branches — ${items.join(', ')}`
+      : 'Yes, multiple branches issuing independently';
+  }
+  return items.length > 0 ? `Yes — ${items.join(', ')}` : 'Yes';
 }
