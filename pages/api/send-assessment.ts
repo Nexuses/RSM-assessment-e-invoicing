@@ -46,16 +46,185 @@ const createStyles = () => StyleSheet.create({
     color: '#757574',
     position: 'relative',
   },
-  fullPageImageContainer: {
-    width: 595.28, // A4 width in points
-    height: 841.89, // A4 height in points
-    display: 'flex',
-    justifyContent: 'center',
+  coverPage: {
+    flexDirection: 'column',
+    backgroundColor: '#ffffff',
+    flex: 1,
+  },
+  coverHeaderBand: {
+    backgroundColor: '#009CD9',
+    paddingTop: 36,
+    paddingBottom: 32,
+    paddingHorizontal: 48,
     alignItems: 'center',
   },
-  fullPageImage: {
-    width: 595.28, // A4 width in points
-    height: 841.89, // A4 height in points
+  coverLogoWrap: {
+    backgroundColor: '#ffffff',
+    borderRadius: 8,
+    padding: 15,
+    overflow: 'hidden',
+    marginBottom: 12,
+  },
+  coverLogo: {
+    width: 100,
+    height: 47,
+    objectFit: 'contain',
+  },
+  coverTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#ffffff',
+    textAlign: 'center',
+    lineHeight: 1.35,
+    marginBottom: 10,
+    maxWidth: 480,
+  },
+  coverSubtitle: {
+    fontSize: 11,
+    color: '#ffffff',
+    textAlign: 'center',
+    lineHeight: 1.45,
+    opacity: 0.95,
+  },
+  coverBody: {
+    flex: 1,
+    paddingHorizontal: 56,
+    paddingTop: 48,
+    paddingBottom: 40,
+    alignItems: 'center',
+  },
+  coverAccentLine: {
+    width: 72,
+    height: 4,
+    backgroundColor: '#2D9C2D',
+    borderRadius: 2,
+    marginBottom: 36,
+  },
+  coverMetaCard: {
+    backgroundColor: '#f0f9ff',
+    padding: 28,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#009CD9',
+    borderStyle: 'solid',
+    width: '100%',
+    marginBottom: 32,
+  },
+  coverMetaLabel: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    color: '#757574',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: 4,
+    textAlign: 'center',
+  },
+  coverMetaValue: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#009CD9',
+    textAlign: 'center',
+    marginBottom: 18,
+  },
+  coverMetaValueLast: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#009CD9',
+    textAlign: 'center',
+    marginBottom: 0,
+  },
+  coverNote: {
+    fontSize: 10,
+    color: '#757574',
+    textAlign: 'center',
+    lineHeight: 1.55,
+    marginBottom: 28,
+    maxWidth: 420,
+  },
+  coverFooterBand: {
+    marginTop: 'auto',
+    width: '100%',
+    paddingTop: 24,
+    borderTopWidth: 1,
+    borderTopColor: '#e5e5e5',
+    borderTopStyle: 'solid',
+    alignItems: 'center',
+  },
+  coverFooterBrand: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    color: '#2D9C2D',
+    textAlign: 'center',
+    marginBottom: 4,
+    letterSpacing: 0.5,
+  },
+  coverFooterTagline: {
+    fontSize: 9,
+    color: '#757574',
+    textAlign: 'center',
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+    marginBottom: 6,
+  },
+  coverFooterUrl: {
+    fontSize: 10,
+    color: '#009CD9',
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  closingContentArea: {
+    padding: 40,
+    paddingTop: 100,
+    paddingBottom: 120,
+    flex: 1,
+  },
+  assistancePageCenter: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 40,
+    paddingTop: 90,
+    paddingBottom: 110,
+  },
+  assistanceCardCenter: {
+    width: '100%',
+    maxWidth: 460,
+  },
+  inquiryCardOuter: {
+    marginTop: 24,
+    width: '100%',
+  },
+  inquiryLead: {
+    fontSize: 10,
+    color: '#757574',
+    lineHeight: 1.6,
+    marginBottom: 16,
+    textAlign: 'left',
+    width: '100%',
+  },
+  inquiryBody: {
+    fontSize: 10,
+    color: '#757574',
+    lineHeight: 1.55,
+    marginBottom: 10,
+    textAlign: 'left',
+    width: '100%',
+  },
+  inquiryBodyLast: {
+    fontSize: 10,
+    color: '#757574',
+    lineHeight: 1.55,
+    marginBottom: 0,
+    textAlign: 'left',
+    width: '100%',
+  },
+  inquiryUrl: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    color: '#009CD9',
+    marginBottom: 10,
+    textAlign: 'left',
+    width: '100%',
   },
   letterheadHeader: {
     backgroundColor: '#009CD9',
@@ -152,30 +321,41 @@ const createStyles = () => StyleSheet.create({
     borderBottomStyle: 'solid',
     textAlign: 'left',
   },
-  personalInfoCard: {
-    backgroundColor: '#f8f9fa',
-    padding: 20,
-    borderRadius: 8,
-    borderLeftWidth: 4,
-    borderLeftColor: '#009CD9',
-    borderLeftStyle: 'solid',
+  summaryCard: {
+    backgroundColor: '#f0f9ff',
+    padding: 25,
+    borderRadius: 12,
     marginBottom: 20,
+    borderWidth: 2,
+    borderColor: '#009CD9',
+    borderStyle: 'solid',
+    width: '100%',
+  },
+  summaryCardCenter: {
+    alignItems: 'center',
   },
   infoRow: {
     flexDirection: 'row',
     marginBottom: 10,
     alignItems: 'center',
+    width: '100%',
+  },
+  infoRowLast: {
+    flexDirection: 'row',
+    marginBottom: 0,
+    alignItems: 'center',
+    width: '100%',
   },
   infoLabel: {
     fontSize: 11,
     fontWeight: 'bold',
     color: '#757574',
-    width: '25%',
+    width: '32%',
     textAlign: 'left',
   },
   infoValue: {
     fontSize: 11,
-    color: '#2D9C2D',
+    color: '#009CD9',
     fontWeight: 'bold',
     flex: 1,
     textAlign: 'left',
@@ -519,13 +699,13 @@ const createStyles = () => StyleSheet.create({
     zIndex: 10,
   },
   pageLogo: {
-    width: 120,
-    height: 90,
+    width: 100,
+    height: 72,
     objectFit: 'contain',
   },
   letterContent: {
     padding: 40,
-    paddingTop: 20,
+    paddingTop: 135,
     flex: 1,
   },
   letterGreeting: {
@@ -570,23 +750,24 @@ const createStyles = () => StyleSheet.create({
   signatureCompany: {
     fontSize: 11,
     color: '#757574',
-    marginBottom: 25,
+    marginBottom: 8,
     lineHeight: 1.6,
   },
   letterFooter: {
-    fontSize: 9,
+    fontSize: 10,
     color: '#757574',
-    marginTop: 15,
-    lineHeight: 1.5,
+    marginTop: 0,
+    marginBottom: 2,
+    lineHeight: 1.45,
     textAlign: 'left',
   },
   letterFooterBold: {
-    fontSize: 9,
+    fontSize: 10,
     color: '#757574',
     fontWeight: 'bold',
-    marginTop: 5,
-    marginBottom: 2,
-    lineHeight: 1.5,
+    marginTop: 2,
+    marginBottom: 1,
+    lineHeight: 1.45,
     textAlign: 'left',
   },
   disclaimerContainer: {
@@ -612,10 +793,20 @@ const createStyles = () => StyleSheet.create({
 const PDF_DISCLAIMER_TEXT =
   "Disclaimer: This is not a comprehensive E-invoicing assessment. This assessment only consists of about 15 questions to quickly assess a few key requirements of the E-invoicing framework. This assessment does not guarantee the detection of all existing or potential vulnerabilities and compliance gaps. It reflects the organization's compliance posture at the time of testing solely based on your responses to the assessment questions. The assessment report is intended solely for your internal use and must not be distributed, disclosed, or relied upon by third parties. RSM shall not be liable for any losses, damages, claims, or expenses arising from, or in connection with, the use of the assessment results.";
 
-const PDF_COVER_PAGE_IMAGE =
-  "https://nexuses.s3.us-east-2.amazonaws.com/RSME-invoicingAssessmentToolfrontandlastpage21.jpeg";
-const PDF_BACK_PAGE_IMAGE =
-  "https://nexuses.s3.us-east-2.amazonaws.com/RSM_E-invoicing_Assessment_Tool_front_and_last_page__1___1_.png";
+const PDF_RSM_LOGO =
+  "https://cdn-nexlink.s3.us-east-2.amazonaws.com/rsm-international-vector-logo_2-removebg-preview_5f53785d-2f5c-421e-a976-6388f78a00f2.png";
+const RSM_UAE_EINVOICING_URL = "https://www.rsm.global/uae/service/e-invoicing";
+
+/** Embed remote images as data URIs so @react-pdf renders JPEG/PNG reliably (avoids blank white cover). */
+async function fetchPdfImageDataUri(url: string): Promise<string> {
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Failed to load PDF image (${response.status}): ${url}`);
+  }
+  const contentType = response.headers.get("content-type") || "image/png";
+  const buffer = Buffer.from(await response.arrayBuffer());
+  return `data:${contentType};base64,${buffer.toString("base64")}`;
+}
 
 // Helper function to generate PDF buffer
 async function generatePDFBuffer(
@@ -626,6 +817,13 @@ async function generatePDFBuffer(
   const currentQuestions = questionsData;
   const assessment = computeAssessment(answers);
 
+  let logoSrc = PDF_RSM_LOGO;
+  try {
+    logoSrc = await fetchPdfImageDataUri(PDF_RSM_LOGO);
+  } catch (imageError) {
+    console.warn("PDF logo: could not embed; using remote URL.", imageError);
+  }
+
   const createDocument = () => {
     const date = new Date();
     const day = String(date.getDate()).padStart(2, '0');
@@ -634,19 +832,15 @@ async function generatePDFBuffer(
     const currentDate = `${day}-${month}-${year}`;
     
     const allAnswers = Object.entries(answers);
-    // Keep the first page comfortably within A4 height to avoid an extra blank page.
-    const questionsPerThirdPage = 5; // First page: Summary + first set of Q&As
-    const questionsPerPage = 11; // For subsequent pages
+    // PDF page 3: first 10 Q&As; PDF page 4: all remaining Q&As
+    const questionsOnPage3 = 10;
     const questionChunksRaw: [string, string][][] = [];
-    
-    // First chunk: first set of questions (rendered on the first page)
+
     if (allAnswers.length > 0) {
-      questionChunksRaw.push(allAnswers.slice(0, questionsPerThirdPage));
+      questionChunksRaw.push(allAnswers.slice(0, questionsOnPage3));
     }
-    
-    // Remaining chunks: rest of the questions
-    for (let i = questionsPerThirdPage; i < allAnswers.length; i += questionsPerPage) {
-      questionChunksRaw.push(allAnswers.slice(i, i + questionsPerPage));
+    if (allAnswers.length > questionsOnPage3) {
+      questionChunksRaw.push(allAnswers.slice(questionsOnPage3));
     }
 
     // Defensive: never render a page for an empty chunk (can lead to a blank page in some renderers)
@@ -717,10 +911,141 @@ async function generatePDFBuffer(
 
     const pages = [];
 
-    const createFullPageImage = (imageSrc: string) =>
+    const createCoverPage = () =>
+      React.createElement(Page, { size: "A4", style: styles.coverPage },
+        React.createElement(View, { style: styles.coverHeaderBand },
+          React.createElement(View, { style: styles.coverLogoWrap },
+            React.createElement(Image, { style: styles.coverLogo, src: logoSrc })
+          ),
+          React.createElement(Text, { style: styles.coverTitle },
+            "RSM E-invoicing Self Assessment Report"
+          ),
+          React.createElement(Text, { style: styles.coverSubtitle },
+            "UAE Mandate Readiness | Indicative Self-Assessment"
+          )
+        ),
+        React.createElement(View, { style: styles.coverBody },
+          React.createElement(View, { style: styles.coverAccentLine }),
+          React.createElement(View, { style: styles.coverMetaCard },
+            React.createElement(Text, { style: styles.coverMetaLabel }, "Prepared For"),
+            React.createElement(Text, { style: styles.coverMetaValue }, personalInfo.company),
+            React.createElement(Text, { style: styles.coverMetaLabel }, "Participant"),
+            React.createElement(Text, { style: styles.coverMetaValue }, personalInfo.name),
+            React.createElement(Text, { style: styles.coverMetaLabel }, "Report Date"),
+            React.createElement(Text, { style: styles.coverMetaValueLast }, currentDate)
+          ),
+          React.createElement(Text, { style: styles.coverNote },
+            "This document is generated automatically from your self-assessment responses. It is intended for internal planning and discussion purposes only."
+          ),
+          React.createElement(View, { style: styles.coverFooterBand },
+            React.createElement(Text, { style: styles.coverFooterTagline }, "The Power of Being Understood"),
+            React.createElement(Text, { style: styles.coverFooterBrand }, "RSM in UAE"),
+            React.createElement(Text, { style: styles.coverFooterUrl }, "www.rsm.global/uae")
+          )
+        )
+      );
+
+    const personalInfoRows: Array<[string, string]> = [
+      ["Assessment Date", currentDate],
+      ["Full Name", personalInfo.name],
+      ["Email Address", personalInfo.email],
+      ["Company", personalInfo.company],
+      ["Position", personalInfo.position],
+      ...(personalInfo.phone ? [["Phone", personalInfo.phone] as [string, string]] : []),
+      ...(personalInfo.website ? [["Website", personalInfo.website] as [string, string]] : []),
+    ];
+
+    const createInfoRow = (label: string, value: string, isLast: boolean) =>
+      React.createElement(View, { style: isLast ? styles.infoRowLast : styles.infoRow },
+        React.createElement(Text, { style: styles.infoLabel }, `${label}:`),
+        React.createElement(Text, { style: styles.infoValue }, value || "—")
+      );
+
+    const createOverviewPage = () =>
       React.createElement(Page, { size: "A4", style: styles.page },
-        React.createElement(View, { style: styles.fullPageImageContainer },
-          React.createElement(Image, { style: styles.fullPageImage, src: imageSrc })
+        React.createElement(View, { style: styles.pageLogoHeader },
+          React.createElement(Image, { style: styles.pageLogo, src: logoSrc })
+        ),
+        React.createElement(View, { style: styles.contentArea },
+          React.createElement(View, { style: styles.section },
+            React.createElement(Text, { style: styles.sectionTitle }, "Personal Information"),
+            React.createElement(View, { style: styles.summaryCard },
+              ...personalInfoRows.map(([label, value], index) =>
+                createInfoRow(label, value, index === personalInfoRows.length - 1)
+              )
+            )
+          ),
+          React.createElement(View, { style: styles.section },
+            React.createElement(Text, { style: styles.sectionTitle }, "Assessment Summary"),
+            React.createElement(View, { style: [styles.summaryCard, styles.summaryCardCenter] },
+              React.createElement(Text, { style: styles.scoreLabel }, "Total Score"),
+              React.createElement(Text, { style: styles.scoreValue }, `${assessment.totalScore.toString()}`),
+              React.createElement(Text, { style: styles.resultText }, `Axis A (Urgency): ${assessment.urgency.score} / ${assessment.maxUrgencyScore} · ${assessment.urgency.category}`),
+              React.createElement(Text, { style: styles.resultText }, `Axis B (Complexity): ${assessment.complexity.score} / ${assessment.maxComplexityScore} · ${assessment.complexity.category}`)
+            )
+          )
+        )
+      );
+
+    const createLetterPage = () =>
+      React.createElement(Page, { size: "A4", style: styles.page },
+        React.createElement(View, { style: styles.pageLogoHeader },
+          React.createElement(Image, { style: styles.pageLogo, src: logoSrc })
+        ),
+        React.createElement(View, { style: styles.letterContent },
+          React.createElement(Text, { style: styles.letterGreeting }, `Dear ${personalInfo.name || "Participant"},`),
+          React.createElement(Text, { style: styles.letterSubject },
+            `Subject: Abridged UAE E-Invoicing Self-Assessment Report – ${personalInfo.company || "Your Organization"}`
+          ),
+          React.createElement(Text, { style: styles.letterBody },
+            "We would like to thank you for your participation in completing the UAE E-Invoicing self-assessment questionnaire."
+          ),
+          React.createElement(Text, { style: styles.letterBody },
+            "This report is auto-generated by the assessment platform, based solely on the responses provided by you. The results are shared as is, without validation, verification, independent testing, or review by our team."
+          ),
+          React.createElement(Text, { style: styles.letterBody },
+            "We believe that this report will assist you in gaining high-level insights into your organization’s UAE E-Invoicing compliance preparedness and identifying areas for improvement as you continue your journey towards adopting the UAE E-Invoicing framework."
+          ),
+          React.createElement(Text, { style: styles.letterBody },
+            "This report is intended solely for the use of management, and sharing should be limited only to authorized personnel within your organization."
+          ),
+          React.createElement(Text, { style: styles.letterBody },
+            "Please do not hesitate to contact us if you have any questions or would like to schedule a session on the outcome of this report with our team."
+          ),
+          React.createElement(Text, { style: styles.letterClosing }, "Thanking you,"),
+          React.createElement(Text, { style: styles.signatureCompany }, "RSM UAE"),
+          React.createElement(Text, { style: styles.letterFooterBold }, "THE POWER OF BEING UNDERSTOOD"),
+          React.createElement(Text, { style: styles.letterFooterBold }, "AUDIT | TAX | CONSULTING"),
+          React.createElement(Text, { style: styles.letterFooter }, "RSM UAE"),
+          React.createElement(Text, { style: styles.letterFooter }, "Floor 14, WeWork Hub 71, Al Khatem Tower,"),
+          React.createElement(Text, { style: styles.letterFooter }, "ADGM Square, Al Maryah Island"),
+          React.createElement(Text, { style: styles.letterFooter }, "P.O. Box 46617"),
+          React.createElement(Text, { style: styles.letterFooter }, "T: +971 (0)4 554 7423"),
+          React.createElement(Text, { style: styles.letterFooter }, "W: www.rsm.ae")
+        )
+      );
+
+    const createFurtherAssistancePage = () =>
+      React.createElement(Page, { size: "A4", style: styles.page },
+        React.createElement(View, { style: styles.pageLogoHeader },
+          React.createElement(Image, { style: styles.pageLogo, src: logoSrc })
+        ),
+        React.createElement(View, { style: styles.assistancePageCenter },
+          React.createElement(View, { style: [styles.summaryCard, styles.assistanceCardCenter] },
+            React.createElement(View, { style: styles.summaryCardCenter },
+              React.createElement(Text, { style: styles.scoreLabel }, "Further Assistance")
+            ),
+            React.createElement(Text, { style: styles.inquiryBody },
+              "For any queries regarding e-invoicing compliance, implementation support, or the interpretation of this assessment report, please visit the RSM in UAE e-invoicing service page:"
+            ),
+            React.createElement(Text, { style: styles.inquiryUrl }, RSM_UAE_EINVOICING_URL),
+            React.createElement(Text, { style: styles.inquiryBodyLast },
+              "Our specialists can support you with mandate readiness, technical integration, and ongoing compliance under the UAE e-invoicing framework."
+            )
+          )
+        ),
+        React.createElement(View, { style: styles.pageFooterDisclaimer },
+          React.createElement(Text, { style: styles.disclaimerTextBottom }, PDF_DISCLAIMER_TEXT)
         )
       );
     
@@ -808,33 +1133,18 @@ async function generatePDFBuffer(
     );
     */
 
-    // Full-page cover, then assessment content, then full-page back cover
     const firstChunk = questionChunks[0] || [];
     const remainingChunks = questionChunks.slice(1);
-    const contentPageCount = 1 + remainingChunks.length;
-    const showDisclaimerOnContentPage = (contentPageIndex: number) =>
-      contentPageIndex === 2 || (contentPageCount < 3 && contentPageIndex === contentPageCount - 1);
 
-    pages.push(createFullPageImage(PDF_COVER_PAGE_IMAGE));
+    pages.push(createCoverPage());
+    pages.push(createOverviewPage());
 
     pages.push(
       React.createElement(Page, { size: "A4", style: styles.page },
         React.createElement(View, { style: styles.pageLogoHeader },
-          React.createElement(Image, {
-            style: styles.pageLogo,
-            src: "https://22527425.fs1.hubspotusercontent-na2.net/hubfs/22527425/RSM-Kuwait/RSM%20Logo%20-%20Color.png"
-          })
+          React.createElement(Image, { style: styles.pageLogo, src: logoSrc })
         ),
         React.createElement(View, { style: styles.contentArea },
-          React.createElement(View, { style: styles.section },
-            React.createElement(Text, { style: styles.sectionTitle }, "Assessment Summary"),
-            React.createElement(View, { style: styles.scoreContainer },
-              React.createElement(Text, { style: styles.scoreLabel }, "Total Score"),
-              React.createElement(Text, { style: styles.scoreValue }, `${assessment.totalScore.toString()}`),
-              React.createElement(Text, { style: styles.resultText }, `Axis A (Urgency): ${assessment.urgency.score} / ${assessment.maxUrgencyScore} · ${assessment.urgency.category}`),
-              React.createElement(Text, { style: styles.resultText }, `Axis B (Complexity): ${assessment.complexity.score} / ${assessment.maxComplexityScore} · ${assessment.complexity.category}`),
-            )
-          ),
           React.createElement(View, { style: styles.section },
             React.createElement(Text, { style: styles.sectionTitle }, "Assessment Details"),
             React.createElement(View, { style: styles.questionsTableContainer },
@@ -851,27 +1161,17 @@ async function generatePDFBuffer(
               )
             )
           )
-        ),
-        showDisclaimerOnContentPage(0)
-          ? React.createElement(View, { style: styles.pageFooterDisclaimer },
-              React.createElement(Text, { style: styles.disclaimerTextBottom }, PDF_DISCLAIMER_TEXT)
-            )
-          : null
+        )
       )
     );
 
-    // Continuation pages (assessment details tables)
     remainingChunks.forEach((chunk, chunkIndex) => {
       const isLastChunk = chunkIndex === remainingChunks.length - 1;
-      const contentPageIndex = 1 + chunkIndex;
 
       pages.push(
         React.createElement(Page, { size: "A4", style: styles.page },
           React.createElement(View, { style: styles.pageLogoHeader },
-            React.createElement(Image, {
-              style: styles.pageLogo,
-              src: "https://22527425.fs1.hubspotusercontent-na2.net/hubfs/22527425/RSM-Kuwait/RSM%20Logo%20-%20Color.png"
-            })
+            React.createElement(Image, { style: styles.pageLogo, src: logoSrc })
           ),
           React.createElement(View, { style: styles.contentAreaContinuation },
             React.createElement(View, { style: styles.section },
@@ -883,17 +1183,13 @@ async function generatePDFBuffer(
                 )
               )
             )
-          ),
-          showDisclaimerOnContentPage(contentPageIndex)
-            ? React.createElement(View, { style: styles.pageFooterDisclaimer },
-                React.createElement(Text, { style: styles.disclaimerTextBottom }, PDF_DISCLAIMER_TEXT)
-              )
-            : null
+          )
         )
       );
     });
 
-    pages.push(createFullPageImage(PDF_BACK_PAGE_IMAGE));
+    pages.push(createLetterPage());
+    pages.push(createFurtherAssistancePage());
 
     return React.createElement(Document, {}, ...pages);
   };
