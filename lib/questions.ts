@@ -126,14 +126,11 @@ export const questionsData: Question[] = [
     id: 'q8',
     text: 'Do you issue invoices from multiple locations or branches?',
     subject: 'Part 2: Volume & Scope',
-    responseType: 'yesno_details',
-    detailsKind: 'branches',
+    responseType: 'select',
     options: [
       { value: '1', label: 'Yes' },
       { value: '0', label: 'No' },
-      { value: 'no_branch', label: 'No branch part' },
     ],
-    placeholder: 'Enter branch name or location',
   },
   {
     id: 'q10',

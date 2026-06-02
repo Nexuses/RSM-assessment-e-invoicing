@@ -209,7 +209,7 @@ export function computeAssessment(answers: Record<string, string>): AssessmentRe
   const q8 = (() => {
     const raw = answers.q8;
     if (raw === '1') return 3;
-    if (raw === '0' || raw === 'no_branch') return 0;
+    if (raw === '0') return 0;
     try {
       const parsed = JSON.parse(raw) as { choice?: string };
       if (parsed.choice === '1') return 3;
