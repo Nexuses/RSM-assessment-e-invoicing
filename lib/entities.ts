@@ -66,20 +66,30 @@ export function getEntitiesList(value: string): EntityRecord[] {
   return parsed && parsed.length > 0 ? parsed : [createEmptyEntity()];
 }
 
-export function validateEntities(value: string): string | null {
+export type ValidateEntitiesOptions = {
+  requireLegalName?: boolean;
+  requireTurnoverBand?: boolean;
+};
+
+export function validateEntities(
+  value: string,
+  options?: ValidateEntitiesOptions,
+): string | null {
+  const requireLegalName = options?.requireLegalName ?? true;
+  const requireTurnoverBand = options?.requireTurnoverBand ?? true;
   const entities = getEntitiesList(value);
 
   for (let i = 0; i < entities.length; i++) {
     const entity = entities[i];
     const label = `Entity #${i + 1}`;
 
-    if (!entity.legalName.trim()) {
+    if (requireLegalName && !entity.legalName.trim()) {
       return `${label}: Entity legal name is required.`;
     }
     if (entity.trn.trim() && !/^\d{15}$/.test(entity.trn.trim())) {
       return `${label}: TRN must be 15 digits when provided.`;
     }
-    if (!entity.turnoverBand) {
+    if (requireTurnoverBand && !entity.turnoverBand) {
       return `${label}: Please select an annual turnover band.`;
     }
     if (!entity.salesInvoicesPerYear.trim()) {

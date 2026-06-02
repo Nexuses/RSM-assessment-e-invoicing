@@ -880,6 +880,7 @@ async function generatePDFBuffer(
             displayAnswer = formatYesNoDetailsDisplay(
               answerValue,
               question.detailsKind ?? 'countries',
+              question.options,
             );
           } else if (question.responseType === 'entities') {
             displayAnswer = formatEntitiesDisplay(answerValue);
@@ -1368,7 +1369,11 @@ function formatAnswerForSheet(
   }
 
   if (question.responseType === "yesno_details") {
-    return formatYesNoDetailsDisplay(answerValue, question.detailsKind ?? 'countries');
+    return formatYesNoDetailsDisplay(
+      answerValue,
+      question.detailsKind ?? 'countries',
+      question.options,
+    );
   }
 
   if (question.responseType === "entities") {
@@ -1749,6 +1754,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                     displayAnswer = formatYesNoDetailsDisplay(
                       answerValue as string,
                       question.detailsKind ?? 'countries',
+                      question.options,
                     );
                   } else if (question.responseType === 'entities') {
                     displayAnswer = formatEntitiesDisplay(answerValue as string);

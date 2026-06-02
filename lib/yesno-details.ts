@@ -1,5 +1,7 @@
+export type YesNoDetailsChoice = '0' | '1' | 'no_branch';
+
 export type YesNoDetailsAnswer = {
-  choice: '0' | '1';
+  choice: YesNoDetailsChoice;
   countries?: string[];
 };
 
@@ -13,18 +15,29 @@ function normalizeCountries(value: unknown): string[] {
   return [];
 }
 
+function isYesNoDetailsChoice(value: unknown): value is YesNoDetailsChoice {
+  return value === '0' || value === '1' || value === 'no_branch';
+}
+
 export function parseYesNoDetails(value: string): YesNoDetailsAnswer | null {
   if (!value?.trim()) return null;
   try {
-    const parsed = JSON.parse(value) as Partial<YesNoDetailsAnswer> & { countries?: unknown };
-    if (parsed.choice === '0' || parsed.choice === '1') {
+    const parsed = JSON.parse(value) as Partial<YesNoDetailsAnswer> & {
+      countries?: unknown;
+    };
+    if (isYesNoDetailsChoice(parsed.choice)) {
       return {
         choice: parsed.choice,
         countries: normalizeCountries(parsed.countries),
       };
     }
   } catch {
-    // ignore invalid JSON
+    if (value === '0' || value === '1') {
+      return { choice: value, countries: [] };
+    }
+    if (value === 'no_branch') {
+      return { choice: 'no_branch', countries: [] };
+    }
   }
   return null;
 }
@@ -53,17 +66,24 @@ export function hasAtLeastOneCountry(details: YesNoDetailsAnswer | null): boolea
 export function formatYesNoDetailsDisplay(
   value: string,
   detailsKind: 'countries' | 'branches' = 'countries',
+  options?: Array<{ value: string; label: string }>,
 ): string {
   const parsed = parseYesNoDetails(value);
   if (!parsed) return value || 'Not answered';
+
+  const optionLabel = options?.find((o) => o.value === parsed.choice)?.label;
+
   if (parsed.choice === '0') {
-    return detailsKind === 'branches' ? 'No, centralized invoicing' : 'No';
+    return optionLabel ?? (detailsKind === 'branches' ? 'No' : 'No');
   }
+  if (parsed.choice === 'no_branch') {
+    return optionLabel ?? 'No branch part';
+  }
+
   const items = (parsed.countries ?? []).map((c) => c.trim()).filter(Boolean);
   if (detailsKind === 'branches') {
-    return items.length > 0
-      ? `Yes, multiple branches — ${items.join(', ')}`
-      : 'Yes, multiple branches issuing independently';
+    const yesLabel = optionLabel ?? 'Yes';
+    return items.length > 0 ? `${yesLabel} — ${items.join(', ')}` : yesLabel;
   }
   return items.length > 0 ? `Yes — ${items.join(', ')}` : 'Yes';
 }

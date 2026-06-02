@@ -490,6 +490,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               displayAnswer = formatYesNoDetailsDisplay(
                 answerValue,
                 question.detailsKind ?? 'countries',
+                question.options,
               );
             } else if (question.responseType === 'entities') {
               displayAnswer = formatEntitiesDisplay(answerValue);

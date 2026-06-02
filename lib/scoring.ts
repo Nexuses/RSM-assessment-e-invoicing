@@ -49,7 +49,7 @@ export function getPhaseFromTurnover(answers: Record<string, string>): PhaseReco
 }
 
 const MAX_URGENCY = 23;
-const MAX_COMPLEXITY = 81;
+const MAX_COMPLEXITY = 76;
 
 const urgencyCategory = (score: number): AssessmentAxisResult => {
   if (score >= 18) {
@@ -177,7 +177,7 @@ export function computeAssessment(answers: Record<string, string>): AssessmentRe
 
   const urgencyScore = q1 + q2 + q3 + q4;
 
-  // Axis B (Complexity): Q6 - Q17
+  // Axis B (Complexity): Q6 - Q16
   const q6 = (() => {
     switch (answers.q6) {
       case 'lt_1k':
@@ -209,10 +209,11 @@ export function computeAssessment(answers: Record<string, string>): AssessmentRe
   const q8 = (() => {
     const raw = answers.q8;
     if (raw === '1') return 3;
-    if (raw === '0') return 0;
+    if (raw === '0' || raw === 'no_branch') return 0;
     try {
       const parsed = JSON.parse(raw) as { choice?: string };
       if (parsed.choice === '1') return 3;
+      if (parsed.choice === '0' || parsed.choice === 'no_branch') return 0;
     } catch {
       // legacy plain value
     }
@@ -319,20 +320,7 @@ export function computeAssessment(answers: Record<string, string>): AssessmentRe
     }
   })();
 
-  const q17 = (() => {
-    switch (answers.q17) {
-      case 'full':
-        return 5;
-      case 'hybrid':
-        return 3;
-      case 'manual':
-        return 0;
-      default:
-        return 0;
-    }
-  })();
-
-  const complexityScore = q6 + q7 + q8 + q9 + q10 + q11 + q12 + q13 + q14 + q15 + q16 + q17;
+  const complexityScore = q6 + q7 + q8 + q9 + q10 + q11 + q12 + q13 + q14 + q15 + q16;
 
   const urgency = urgencyCategory(urgencyScore);
   const complexity = complexityCategory(complexityScore);

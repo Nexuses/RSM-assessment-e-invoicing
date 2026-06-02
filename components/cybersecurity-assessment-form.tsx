@@ -68,6 +68,11 @@ import {
   selectCountriesNeedsList,
   stringifySelectCountries,
 } from "@/lib/select-countries";
+import {
+  countryOptionsWithSelections,
+  getCountryDropdownOptions,
+} from "@/lib/country-options";
+import { ThemedMultiSelect, ThemedSelect } from "@/components/themed-select";
 
 // Add this near the top of the file, before the component
 const BLOCKED_EMAIL_DOMAINS = [
@@ -153,7 +158,7 @@ export function CybersecurityAssessmentForm() {
     };
   }, [isConsultationModalOpen]);
 
-  // Question 6 (q7): single entity → question 10 allows only one entity card
+  // Question 7 (q7): single entity → entity details allows only one entity card
   useEffect(() => {
     const currentQ = assessmentQuestions[currentQuestion - 1];
     if (currentQ?.id !== "q9_entities" || answers.q7 !== "single_trn") return;
@@ -224,7 +229,7 @@ export function CybersecurityAssessmentForm() {
   const handleAnswerChange = (questionId: string, value: string) => {
     let updatedAnswers = { ...answers, [questionId]: value };
 
-    // Question 6 (q7): single entity only — trim entities if user changes selection
+    // Question 7 (q7): single entity only — trim entities if user changes selection
     if (questionId === "q7" && value === "single_trn" && updatedAnswers.q9_entities) {
       const entities = parseEntities(updatedAnswers.q9_entities);
       if (entities && entities.length > 1) {
@@ -381,7 +386,11 @@ export function CybersecurityAssessmentForm() {
       }
 
       if (currentQ.responseType === 'entities') {
-        const entityError = validateEntities(currentAnswer);
+        const isSingleEntity = answers.q7 === "single_trn";
+        const entityError = validateEntities(currentAnswer, {
+          requireLegalName: !isSingleEntity,
+          requireTurnoverBand: !isSingleEntity,
+        });
         if (entityError) {
           setFormErrors([entityError]);
           return;
@@ -478,7 +487,11 @@ export function CybersecurityAssessmentForm() {
       }
 
       if (currentQ.responseType === 'entities') {
-        const entityError = validateEntities(currentAnswer);
+        const isSingleEntity = answers.q7 === "single_trn";
+        const entityError = validateEntities(currentAnswer, {
+          requireLegalName: !isSingleEntity,
+          requireTurnoverBand: !isSingleEntity,
+        });
         if (entityError) {
           setFormErrors([entityError]);
           return;
@@ -1068,6 +1081,7 @@ export function CybersecurityAssessmentForm() {
           {assessment === null ? (
                 <motion.div
                   key={`question-${currentQuestion}`}
+              className="relative z-20"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
@@ -1084,23 +1098,37 @@ export function CybersecurityAssessmentForm() {
                       </CardTitle>
                   </div>
                     </CardHeader>
-                <CardContent className="px-6 py-6">
+                <CardContent className="overflow-visible px-6 py-6">
                   {(() => {
                     const currentQ = assessmentQuestions[currentQuestion - 1];
                     const currentAnswer = answers[currentQ.id] || '';
                     
                     // Render based on response type
                     if (currentQ.responseType === 'entities') {
+                      const isSingleEntity = answers.q7 === "single_trn";
                       const allowMultipleEntities =
                         answers.q7 === "multiple_trn" || answers.q7 === "tax_group";
+                      const applySingleEntityPrefill = (
+                        entity: EntityRecord,
+                      ): EntityRecord => {
+                        if (!isSingleEntity) return entity;
+                        return {
+                          ...entity,
+                          legalName: entity.legalName || personalInfo.company,
+                          turnoverBand: entity.turnoverBand || answers.q2 || "",
+                        };
+                      };
                       const entityList = allowMultipleEntities
-                        ? getEntitiesList(currentAnswer)
-                        : getEntitiesList(currentAnswer).slice(0, 1);
+                        ? getEntitiesList(currentAnswer).map(applySingleEntityPrefill)
+                        : getEntitiesList(currentAnswer)
+                            .slice(0, 1)
+                            .map(applySingleEntityPrefill);
 
                       const updateEntities = (entities: EntityRecord[]) => {
-                        const nextEntities = allowMultipleEntities
+                        const nextEntitiesRaw = allowMultipleEntities
                           ? entities
                           : entities.slice(0, 1);
+                        const nextEntities = nextEntitiesRaw.map(applySingleEntityPrefill);
                         handleAnswerChange(currentQ.id, stringifyEntities(nextEntities));
                       };
 
@@ -1131,6 +1159,12 @@ export function CybersecurityAssessmentForm() {
 
                       return (
                         <div className="flex flex-col gap-5">
+                          {isSingleEntity && (
+                            <div className="rounded-xl border border-[#00AEEF]/20 bg-[#f8fcfe] px-4 py-3 text-sm text-[#1b3a57]">
+                              Using your earlier responses for company name and annual turnover.
+                              Please complete only the remaining implementation details.
+                            </div>
+                          )}
                           {entityList.map((entity, index) => (
                             <div
                               key={index}
@@ -1152,19 +1186,21 @@ export function CybersecurityAssessmentForm() {
                                 )}
                               </div>
                               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                                <div className="space-y-2">
-                                  <Label className="text-sm font-semibold text-[#1b3a57]">
-                                    Entity legal name <span className="text-red-500">*</span>
-                                  </Label>
-                                  <Input
-                                    value={entity.legalName}
-                                    onChange={(e) =>
-                                      updateEntityAt(index, "legalName", e.target.value)
-                                    }
-                                    placeholder="e.g. ABC Trading LLC"
-                                    className={fieldClassName}
-                                  />
-                                </div>
+                                {!isSingleEntity && (
+                                  <div className="space-y-2">
+                                    <Label className="text-sm font-semibold text-[#1b3a57]">
+                                      Entity legal name <span className="text-red-500">*</span>
+                                    </Label>
+                                    <Input
+                                      value={entity.legalName}
+                                      onChange={(e) =>
+                                        updateEntityAt(index, "legalName", e.target.value)
+                                      }
+                                      placeholder="e.g. ABC Trading LLC"
+                                      className={fieldClassName}
+                                    />
+                                  </div>
+                                )}
                                 <div className="space-y-2">
                                   <Label className="text-sm font-semibold text-[#1b3a57]">
                                     TRN (15 digits, optional)
@@ -1179,25 +1215,27 @@ export function CybersecurityAssessmentForm() {
                                     className={fieldClassName}
                                   />
                                 </div>
-                                <div className="space-y-2">
-                                  <Label className="text-sm font-semibold text-[#1b3a57]">
-                                    Annual turnover band <span className="text-red-500">*</span>
-                                  </Label>
-                                  <select
-                                    value={entity.turnoverBand}
-                                    onChange={(e) =>
-                                      updateEntityAt(index, "turnoverBand", e.target.value)
-                                    }
-                                    className={selectClassName}
-                                  >
-                                    <option value="">Select...</option>
-                                    {TURNOVER_BAND_OPTIONS.map((option) => (
-                                      <option key={option.value} value={option.value}>
-                                        {option.label}
-                                      </option>
-                                    ))}
-                                  </select>
-                                </div>
+                                {!isSingleEntity && (
+                                  <div className="space-y-2">
+                                    <Label className="text-sm font-semibold text-[#1b3a57]">
+                                      Annual turnover band <span className="text-red-500">*</span>
+                                    </Label>
+                                    <select
+                                      value={entity.turnoverBand}
+                                      onChange={(e) =>
+                                        updateEntityAt(index, "turnoverBand", e.target.value)
+                                      }
+                                      className={selectClassName}
+                                    >
+                                      <option value="">Select...</option>
+                                      {TURNOVER_BAND_OPTIONS.map((option) => (
+                                        <option key={option.value} value={option.value}>
+                                          {option.label}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                )}
                                 <div className="space-y-2">
                                   <Label className="text-sm font-semibold text-[#1b3a57]">
                                     Sales invoices/year (B2B &amp; B2G){" "}
@@ -1275,16 +1313,16 @@ export function CybersecurityAssessmentForm() {
                         </div>
                       );
                     } else if (currentQ.responseType === 'yesno_details') {
-                      const details = parseYesNoDetails(currentAnswer) ?? {
-                        choice: '' as const,
-                        countries: [],
-                      };
-                      const selectedChoice = details.choice;
+                      const details = parseYesNoDetails(currentAnswer);
+                      const selectedChoice = details?.choice ?? '';
                       const countryList = getCountriesList(
                         selectedChoice === '1' ? details : null,
                       );
 
-                      const updateYesNoDetails = (choice: '0' | '1', countries?: string[]) => {
+                      const updateYesNoDetails = (
+                        choice: '0' | '1' | 'no_branch',
+                        countries?: string[],
+                      ) => {
                         handleAnswerChange(
                           currentQ.id,
                           stringifyYesNoDetails({
@@ -1320,6 +1358,9 @@ export function CybersecurityAssessmentForm() {
                           {currentQ.options?.map((option) => {
                             const id = `${currentQ.id}-${option.value}`;
                             const isSelected = selectedChoice === option.value;
+                            const useBranchYesNoStyle =
+                              currentQ.detailsKind === 'branches' &&
+                              (option.value === '1' || option.value === '0');
                             return (
                               <div key={option.value} className="flex-1">
                                 <input
@@ -1330,7 +1371,7 @@ export function CybersecurityAssessmentForm() {
                                   checked={isSelected}
                                   onChange={() =>
                                     updateYesNoDetails(
-                                      option.value as '0' | '1',
+                                      option.value as '0' | '1' | 'no_branch',
                                       option.value === '1' ? countryList : [],
                                     )
                                   }
@@ -1340,14 +1381,17 @@ export function CybersecurityAssessmentForm() {
                                   htmlFor={id}
                                   className={cn(
                                     "flex w-full items-center gap-4 rounded-2xl border bg-white px-5 py-4 text-sm font-medium text-gray-700 shadow-sm transition-all focus:outline-none cursor-pointer",
-                                    option.value === "1" && "border border-[#3F9C35]",
-                                    option.value === "0" && "border border-[#00AEEF]",
-                                    !isSelected && option.value === "1" && "hover:border-[#3F9C35] hover:shadow-lg",
-                                    !isSelected && option.value === "0" && "hover:border-[#00AEEF] hover:shadow-lg",
-                                    isSelected && option.value === "1" &&
+                                    useBranchYesNoStyle && option.value === "1" && "border border-[#3F9C35]",
+                                    useBranchYesNoStyle && option.value === "0" && "border border-[#00AEEF]",
+                                    !useBranchYesNoStyle && "border-gray-200 hover:border-[#00AEEF]/60 hover:shadow-md",
+                                    !isSelected && useBranchYesNoStyle && option.value === "1" && "hover:border-[#3F9C35] hover:shadow-lg",
+                                    !isSelected && useBranchYesNoStyle && option.value === "0" && "hover:border-[#00AEEF] hover:shadow-lg",
+                                    isSelected && useBranchYesNoStyle && option.value === "1" &&
                                       "border-[#3F9C35] bg-gradient-to-r from-[#22c55e] to-[#16a34a] text-white shadow-[0_12px_30px_rgba(34,197,94,0.22)] hover:shadow-[0_12px_30px_rgba(34,197,94,0.3)]",
-                                    isSelected && option.value === "0" &&
+                                    isSelected && useBranchYesNoStyle && option.value === "0" &&
                                       "border-[#00AEEF] bg-gradient-to-r from-[#ef4444] to-[#dc2626] text-white shadow-[0_12px_30px_rgba(239,68,68,0.22)] hover:shadow-[0_12px_30px_rgba(239,68,68,0.3)]",
+                                    isSelected && !useBranchYesNoStyle &&
+                                      "border-[#00AEEF] bg-gradient-to-r from-[#00AEEF] to-[#0091cf] text-white shadow-[0_12px_30px_rgba(0,174,239,0.22)]",
                                   )}
                                 >
                                   <span
@@ -1359,8 +1403,9 @@ export function CybersecurityAssessmentForm() {
                                     <Check
                                       className={cn(
                                         "h-3.5 w-3.5 transition-opacity",
-                                        isSelected && option.value === "1" && "text-[#22c55e] opacity-100",
-                                        isSelected && option.value === "0" && "text-[#ef4444] opacity-100",
+                                        isSelected && useBranchYesNoStyle && option.value === "1" && "text-[#22c55e] opacity-100",
+                                        isSelected && useBranchYesNoStyle && option.value === "0" && "text-[#ef4444] opacity-100",
+                                        isSelected && !useBranchYesNoStyle && "text-[#00AEEF] opacity-100",
                                         !isSelected && "opacity-0",
                                       )}
                                     />
@@ -1433,6 +1478,11 @@ export function CybersecurityAssessmentForm() {
                       const parsed = parseSelectCountries(currentAnswer);
                       const selectedValue = parsed?.value ?? '';
                       const countryList = getCountriesListForSelect(parsed);
+                      const countryDropdownOptions = selectCountriesNeedsList(
+                        selectedValue,
+                      )
+                        ? getCountryDropdownOptions(selectedValue)
+                        : [];
 
                       const updateSelectCountries = (
                         value: string,
@@ -1446,24 +1496,6 @@ export function CybersecurityAssessmentForm() {
                               ? countries ?? ['']
                               : [],
                           }),
-                        );
-                      };
-
-                      const updateCountryAt = (index: number, text: string) => {
-                        const next = [...countryList];
-                        next[index] = text;
-                        updateSelectCountries(selectedValue, next);
-                      };
-
-                      const addCountry = () => {
-                        updateSelectCountries(selectedValue, [...countryList, '']);
-                      };
-
-                      const removeCountry = (index: number) => {
-                        if (countryList.length <= 1) return;
-                        updateSelectCountries(
-                          selectedValue,
-                          countryList.filter((_, i) => i !== index),
                         );
                       };
 
@@ -1486,7 +1518,9 @@ export function CybersecurityAssessmentForm() {
                                       selectCountriesNeedsList(option.value)
                                         ? option.value === selectedValue
                                           ? countryList
-                                          : ['']
+                                          : option.value === 'ksa'
+                                            ? ['Saudi Arabia']
+                                            : []
                                         : [],
                                     )
                                   }
@@ -1526,46 +1560,45 @@ export function CybersecurityAssessmentForm() {
                             );
                           })}
                           {selectCountriesNeedsList(selectedValue) && (
-                            <div className="mt-2 space-y-3">
+                            <div className="relative z-30 mt-3 space-y-3 rounded-2xl border border-[#00AEEF]/20 bg-gradient-to-b from-[#f8fcfe] to-white p-4 shadow-sm">
                               <Label className="block text-sm font-semibold text-[#1b3a57]">
                                 {selectedValue === 'ksa'
                                   ? 'Specify countries (KSA)'
                                   : 'Specify countries (global)'}
                               </Label>
-                              {countryList.map((country, index) => (
-                                <div key={index} className="flex items-center gap-2">
-                                  <Input
-                                    value={country}
-                                    onChange={(e) =>
-                                      updateCountryAt(index, e.target.value)
-                                    }
-                                    placeholder={
-                                      currentQ.placeholder || 'Enter country name'
-                                    }
-                                    className="h-12 flex-1 rounded-xl border-gray-200 bg-white text-base focus-visible:ring-2 focus-visible:ring-[#00AEEF]"
-                                  />
-                                  {countryList.length > 1 && (
-                                    <Button
-                                      type="button"
-                                      variant="outline"
-                                      onClick={() => removeCountry(index)}
-                                      className="h-12 w-12 shrink-0 rounded-xl border-gray-200 p-0"
-                                      aria-label="Remove country"
-                                    >
-                                      <X className="h-4 w-4" />
-                                    </Button>
+                              <p className="text-xs text-gray-500">
+                                {selectedValue === 'global'
+                                  ? 'Select one or more countries from the list.'
+                                  : 'Confirm the country for KSA compliance.'}
+                              </p>
+                              {selectedValue === 'global' ? (
+                                <ThemedMultiSelect
+                                  values={countryList}
+                                  onChange={(countries) =>
+                                    updateSelectCountries(selectedValue, countries)
+                                  }
+                                  options={countryOptionsWithSelections(
+                                    countryDropdownOptions,
+                                    countryList,
                                   )}
-                                </div>
-                              ))}
-                              <Button
-                                type="button"
-                                variant="outline"
-                                onClick={addCountry}
-                                className="h-11 w-full rounded-full border-[#00AEEF] text-sm font-semibold text-[#00AEEF] hover:bg-[#e6f5fc]"
-                              >
-                                <Plus className="mr-2 h-4 w-4" />
-                                Add another country
-                              </Button>
+                                  placeholder="Select countries..."
+                                  searchable
+                                  aria-label="Countries for global mandates"
+                                />
+                              ) : (
+                                <ThemedSelect
+                                  value={countryList[0] ?? ''}
+                                  onChange={(next) =>
+                                    updateSelectCountries(
+                                      selectedValue,
+                                      next ? [next] : [],
+                                    )
+                                  }
+                                  options={countryDropdownOptions}
+                                  placeholder="Select country..."
+                                  aria-label="Country for KSA"
+                                />
+                              )}
                             </div>
                           )}
                         </div>
@@ -2034,7 +2067,7 @@ export function CybersecurityAssessmentForm() {
             </AnimatePresence>
             {assessment === null && (
               <motion.div
-            className="rounded-3xl border-2 border-[#3F9C35] bg-white/80 px-6 py-5 shadow-sm"
+            className="relative z-0 rounded-3xl border-2 border-[#3F9C35] bg-white/80 px-6 py-5 shadow-sm"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2, duration: 0.5 }}

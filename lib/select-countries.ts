@@ -43,16 +43,17 @@ export function selectCountriesNeedsList(value: string): boolean {
 export function getCountriesListForSelect(
   details: SelectCountriesAnswer | null,
 ): string[] {
-  if (!details || !selectCountriesNeedsList(details.value)) return [''];
-  const list = details.countries ?? [];
-  return list.length > 0 ? list : [''];
+  if (!details || !selectCountriesNeedsList(details.value)) return [];
+  return (details.countries ?? []).map((c) => c.trim()).filter(Boolean);
 }
 
 export function stringifySelectCountries(data: SelectCountriesAnswer): string {
   if (selectCountriesNeedsList(data.value)) {
     return JSON.stringify({
       value: data.value,
-      countries: (data.countries ?? []).map((c) => c.trim()),
+      countries: (data.countries ?? [])
+        .map((c) => c.trim())
+        .filter(Boolean),
     });
   }
   return data.value;

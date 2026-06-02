@@ -36,7 +36,6 @@ export const questionsData: Question[] = [
     options: [
       { value: 'gt_50m', label: 'Greater than AED 50 Million (Likely Phase 1)' },
       { value: 'lt_50m', label: 'Less than AED 50 Million (Likely Phase 2)' },
-      { value: 'not_registered_vat', label: 'Not Registered for VAT' },
     ],
   },
   {
@@ -96,17 +95,6 @@ export const questionsData: Question[] = [
     ],
   },
   {
-    id: 'q7',
-    text: 'How many distinct Legal Entities (Tax Registration Numbers) need to be onboarded?',
-    subject: 'Part 2: Volume & Scope',
-    responseType: 'select',
-    options: [
-      { value: 'single_trn', label: 'Single Entity (1 TRN)' },
-      { value: 'multiple_trn', label: 'Multiple Entities (Separate TRNs)' },
-      { value: 'tax_group', label: 'Tax Group (1 TRN for multiple entities)' },
-    ],
-  },
-  {
     id: 'q9',
     text: 'Do you require e-invoicing compliance for countries other than the UAE?',
     subject: 'Part 2: Volume & Scope',
@@ -116,7 +104,17 @@ export const questionsData: Question[] = [
       { value: 'ksa', label: 'Yes, KSA (ZATCA)' },
       { value: 'global', label: 'Yes, other Global mandates' },
     ],
-    placeholder: 'Enter country name',
+  },
+  {
+    id: 'q7',
+    text: 'How many distinct Legal Entities (Tax Registration Numbers) need to be onboarded?',
+    subject: 'Part 2: Volume & Scope',
+    responseType: 'select',
+    options: [
+      { value: 'single_trn', label: 'Single Entity (1 TRN)' },
+      { value: 'multiple_trn', label: 'Multiple Entities (Separate TRNs)' },
+      { value: 'tax_group', label: 'Tax Group (1 TRN for multiple entities)' },
+    ],
   },
   {
     id: 'q9_entities',
@@ -131,8 +129,9 @@ export const questionsData: Question[] = [
     responseType: 'yesno_details',
     detailsKind: 'branches',
     options: [
-      { value: '0', label: 'No, centralized invoicing' },
-      { value: '1', label: 'Yes, multiple branches issuing independently' },
+      { value: '1', label: 'Yes' },
+      { value: '0', label: 'No' },
+      { value: 'no_branch', label: 'No branch part' },
     ],
     placeholder: 'Enter branch name or location',
   },
@@ -142,8 +141,8 @@ export const questionsData: Question[] = [
     subject: 'Part 3: Technical Readiness',
     responseType: 'select_other',
     options: [
-      { value: 'tier1', label: 'Tier 1: SAP / Oracle / Microsoft Dynamics' },
-      { value: 'tier2', label: 'Tier 2/Cloud: Sage / Zoho / QuickBooks / Xero' },
+      { value: 'tier1', label: 'SAP / Oracle / Microsoft Dynamics' },
+      { value: 'tier2', label: 'Sage / Zoho / QuickBooks / Xero' },
       { value: 'custom', label: 'Legacy/Custom-built ERP' },
       { value: 'manual', label: 'Manual: Excel / Word' },
       { value: 'other', label: 'Other' },
@@ -163,12 +162,12 @@ export const questionsData: Question[] = [
   },
   {
     id: 'q9_9',
-    text: 'Do you need purchase invoice (AP) integration with ERP?',
+    text: 'Do you require integration with the ASP platform?',
     subject: 'Part 2A: Additional Implementation Inputs',
     responseType: 'select',
     options: [
-      { value: 'full_integration', label: 'Full integration' },
-      { value: 'dashboard_manual', label: 'Dashboard only (manual entry)' },
+      { value: 'yes', label: 'Yes' },
+      { value: 'no', label: 'No' },
     ],
   },
   {
@@ -184,6 +183,17 @@ export const questionsData: Question[] = [
     ],
   },
   {
+    id: 'q13',
+    text: 'Do you have an internal IT team capable of managing system integration?',
+    subject: 'Part 3: Technical Readiness',
+    responseType: 'select',
+    options: [
+      { value: 'inhouse', label: 'Yes, in-house team' },
+      { value: 'external', label: 'No, we rely on an external vendor' },
+      { value: 'none', label: 'No IT resources available' },
+    ],
+  },
+  {
     id: 'q12',
     text: 'Where is your invoice data currently hosted (Data Residency)?',
     subject: 'Part 3: Technical Readiness',
@@ -193,17 +203,6 @@ export const questionsData: Question[] = [
       { value: 'cloud_global', label: 'Cloud (Global/Outside UAE)' },
       { value: 'onprem_uae', label: 'On-Premise Server (UAE)' },
       { value: 'local', label: 'Local Computers/Laptops' },
-    ],
-  },
-  {
-    id: 'q13',
-    text: 'Do you have an internal IT team capable of managing system integration?',
-    subject: 'Part 3: Technical Readiness',
-    responseType: 'select',
-    options: [
-      { value: 'inhouse', label: 'Yes, in-house team' },
-      { value: 'external', label: 'No, we rely on an external vendor' },
-      { value: 'none', label: 'No IT resources available' },
     ],
   },
   {
@@ -235,17 +234,6 @@ export const questionsData: Question[] = [
       { value: 'one', label: '1 Standard Template' },
       { value: 'two_to_five', label: '2-5 Variations' },
       { value: 'five_plus', label: '5+ Complex Templates' },
-    ],
-  },
-  {
-    id: 'q17',
-    text: 'What is your preferred integration model?',
-    subject: 'Part 4: Invoice Complexity',
-    responseType: 'select',
-    options: [
-      { value: 'full', label: 'Full Integration' },
-      { value: 'hybrid', label: 'Hybrid' },
-      { value: 'manual', label: 'Manual' },
     ],
   },
   {
