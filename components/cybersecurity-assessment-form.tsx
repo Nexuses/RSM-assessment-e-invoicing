@@ -1159,12 +1159,6 @@ export function CybersecurityAssessmentForm() {
 
                       return (
                         <div className="flex flex-col gap-5">
-                          {isSingleEntity && (
-                            <div className="rounded-xl border border-[#00AEEF]/20 bg-[#f8fcfe] px-4 py-3 text-sm text-[#1b3a57]">
-                              Using your earlier responses for company name and annual turnover.
-                              Please complete only the remaining implementation details.
-                            </div>
-                          )}
                           {entityList.map((entity, index) => (
                             <div
                               key={index}

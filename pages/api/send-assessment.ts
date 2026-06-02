@@ -1704,6 +1704,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 <td><strong>Position:</strong></td>
                 <td>${personalInfo.position}</td>
               </tr>
+              <tr>
+                <td><strong>Website:</strong></td>
+                <td>${personalInfo.website || '—'}</td>
+              </tr>
             </table>
           </div>
           <div class="section">
@@ -2058,7 +2062,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     try {
       const internalEmailResult = await transporter.sendMail({
         from: process.env.FROM_EMAIL,
-        to: "e-invoice-inquiry@rsm.ae",
+        to: ['e-invoice-inquiry@rsm.ae', 'arpit.m@nexuses.in'],
         replyTo: 'e-invoice-inquiry@rsm.ae',
         subject: "E-Invoicing Assessment - UAE",
         html: emailContent,
