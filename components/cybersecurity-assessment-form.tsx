@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   Card,
   CardContent,
@@ -47,6 +47,7 @@ import {
   stringifyEntities,
   FTA_PILOT_OPTIONS,
   TURNOVER_BAND_OPTIONS,
+  INVOICE_VOLUME_BAND_OPTIONS,
   validateEntities,
   type EntityRecord,
 } from "@/lib/entities";
@@ -103,7 +104,21 @@ export function CybersecurityAssessmentForm() {
   const [questions] = useState<Question[]>(questionsData);
   // Filter out q5 (VAT question) from questions array since it's shown separately
   const [assessmentQuestions] = useState<Question[]>(questionsData.filter(q => q.id !== 'q5'));
-  const TOTAL_QUESTIONS = assessmentQuestions.length; // Total number of questions (excluding VAT question)
+  const showAspPlatformQuestion = answers.q9_8 === "require_asp_support";
+  const visibleQuestions = useMemo(
+    () =>
+      assessmentQuestions.filter(
+        (q) => q.id !== "q9_9" || showAspPlatformQuestion,
+      ),
+    [assessmentQuestions, showAspPlatformQuestion],
+  );
+  const TOTAL_QUESTIONS = visibleQuestions.length;
+
+  useEffect(() => {
+    if (currentQuestion > visibleQuestions.length && visibleQuestions.length > 0) {
+      setCurrentQuestion(visibleQuestions.length);
+    }
+  }, [visibleQuestions.length, currentQuestion]);
   const [isConsultationModalOpen, setIsConsultationModalOpen] = useState(false);
   const [isSubmittingConsultation, setIsSubmittingConsultation] = useState(false);
   const [consultationSuccess, setConsultationSuccess] = useState(false);
@@ -160,7 +175,7 @@ export function CybersecurityAssessmentForm() {
 
   // Question 7 (q7): single entity → entity details allows only one entity card
   useEffect(() => {
-    const currentQ = assessmentQuestions[currentQuestion - 1];
+    const currentQ = visibleQuestions[currentQuestion - 1];
     if (currentQ?.id !== "q9_entities" || answers.q7 !== "single_trn") return;
 
     const entities = parseEntities(answers.q9_entities || "");
@@ -170,7 +185,7 @@ export function CybersecurityAssessmentForm() {
         q9_entities: stringifyEntities([entities[0]]),
       }));
     }
-  }, [currentQuestion, answers.q7, answers.q9_entities, assessmentQuestions]);
+  }, [currentQuestion, answers.q7, answers.q9_entities, visibleQuestions]);
 
   const consultationSchema = z.object({
     firstName: z.string().min(2, { message: "Please enter a valid first name." }),
@@ -240,10 +255,16 @@ export function CybersecurityAssessmentForm() {
       }
     }
 
+    // Question 12 (q9_8): ASP platform follow-up only when Require ASP support
+    if (questionId === "q9_8" && value !== "require_asp_support") {
+      const { q9_9: _removed, ...rest } = updatedAnswers;
+      updatedAnswers = rest;
+    }
+
     setAnswers(updatedAnswers);
     
     // Get current question to check response type
-    const currentQ = assessmentQuestions[currentQuestion - 1];
+    const currentQ = visibleQuestions[currentQuestion - 1];
     
     // Only auto-advance for yesno and select types, not for text, number, or multiselect
     if (currentQ && (currentQ.responseType === 'yesno' || currentQ.responseType === 'select')) {
@@ -328,7 +349,7 @@ export function CybersecurityAssessmentForm() {
     if (currentQuestion === 0) {
       form.handleSubmit(handlePersonalInfoSubmit)();
     } else if (currentQuestion < TOTAL_QUESTIONS) {
-      const currentQ = assessmentQuestions[currentQuestion - 1];
+      const currentQ = visibleQuestions[currentQuestion - 1];
       const currentAnswer = answers[currentQ.id];
       
       // Validate based on response type
@@ -390,6 +411,7 @@ export function CybersecurityAssessmentForm() {
         const entityError = validateEntities(currentAnswer, {
           requireLegalName: !isSingleEntity,
           requireTurnoverBand: !isSingleEntity,
+          requireSalesInvoicesPerYear: !isSingleEntity,
         });
         if (entityError) {
           setFormErrors([entityError]);
@@ -429,7 +451,7 @@ export function CybersecurityAssessmentForm() {
       setCurrentQuestion(currentQuestion + 1);
     } else {
       // This is the last question - ensure the answer is saved before calculating score
-      const currentQ = assessmentQuestions[currentQuestion - 1];
+      const currentQ = visibleQuestions[currentQuestion - 1];
       const currentAnswer = answers[currentQ.id];
       
       // Validate the last answer
@@ -491,6 +513,7 @@ export function CybersecurityAssessmentForm() {
         const entityError = validateEntities(currentAnswer, {
           requireLegalName: !isSingleEntity,
           requireTurnoverBand: !isSingleEntity,
+          requireSalesInvoicesPerYear: !isSingleEntity,
         });
         if (entityError) {
           setFormErrors([entityError]);
@@ -534,7 +557,7 @@ export function CybersecurityAssessmentForm() {
   const calculateScore = async () => {
     // Use current answers state - ensure we have the latest answer
     // Get the current question's answer if it exists
-    const currentQ = assessmentQuestions[currentQuestion - 1];
+    const currentQ = visibleQuestions[currentQuestion - 1];
     let finalAnswers = { ...answers };
     
     // If we're on the last question, make sure its answer is included
@@ -1094,13 +1117,13 @@ export function CybersecurityAssessmentForm() {
                       Question {currentQuestion} of {TOTAL_QUESTIONS}
                     </span>
                     <CardTitle className="text-xl font-semibold leading-snug text-[#1b3a57] sm:text-2xl">
-                      {assessmentQuestions[currentQuestion - 1].text}
+                      {visibleQuestions[currentQuestion - 1].text}
                       </CardTitle>
                   </div>
                     </CardHeader>
                 <CardContent className="overflow-visible px-6 py-6">
                   {(() => {
-                    const currentQ = assessmentQuestions[currentQuestion - 1];
+                    const currentQ = visibleQuestions[currentQuestion - 1];
                     const currentAnswer = answers[currentQ.id] || '';
                     
                     // Render based on response type
@@ -1230,34 +1253,38 @@ export function CybersecurityAssessmentForm() {
                                     </select>
                                   </div>
                                 )}
-                                <div className="space-y-2">
-                                  <Label className="text-sm font-semibold text-[#1b3a57]">
-                                    Sales invoices/year (B2B &amp; B2G){" "}
-                                    <span className="text-red-500">*</span>
-                                  </Label>
-                                  <Input
-                                    type="number"
-                                    min={0}
-                                    value={entity.salesInvoicesPerYear}
-                                    onChange={(e) =>
-                                      updateEntityAt(
-                                        index,
-                                        "salesInvoicesPerYear",
-                                        e.target.value,
-                                      )
-                                    }
-                                    placeholder="e.g. 12000"
-                                    className={fieldClassName}
-                                  />
-                                </div>
+                                {!isSingleEntity && (
+                                  <div className="space-y-2">
+                                    <Label className="text-sm font-semibold text-[#1b3a57]">
+                                      Sales invoices/year (B2B &amp; B2G){" "}
+                                      <span className="text-red-500">*</span>
+                                    </Label>
+                                    <select
+                                      value={entity.salesInvoicesPerYear}
+                                      onChange={(e) =>
+                                        updateEntityAt(
+                                          index,
+                                          "salesInvoicesPerYear",
+                                          e.target.value,
+                                        )
+                                      }
+                                      className={selectClassName}
+                                    >
+                                      <option value="">Select...</option>
+                                      {INVOICE_VOLUME_BAND_OPTIONS.map((option) => (
+                                        <option key={option.value} value={option.value}>
+                                          {option.label}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                )}
                                 <div className="space-y-2">
                                   <Label className="text-sm font-semibold text-[#1b3a57]">
                                     Purchase invoices/year (excl. imports){" "}
                                     <span className="text-red-500">*</span>
                                   </Label>
-                                  <Input
-                                    type="number"
-                                    min={0}
+                                  <select
                                     value={entity.purchaseInvoicesPerYear}
                                     onChange={(e) =>
                                       updateEntityAt(
@@ -1266,9 +1293,15 @@ export function CybersecurityAssessmentForm() {
                                         e.target.value,
                                       )
                                     }
-                                    placeholder="e.g. 8000"
-                                    className={fieldClassName}
-                                  />
+                                    className={selectClassName}
+                                  >
+                                    <option value="">Select...</option>
+                                    {INVOICE_VOLUME_BAND_OPTIONS.map((option) => (
+                                      <option key={option.value} value={option.value}>
+                                        {option.label}
+                                      </option>
+                                    ))}
+                                  </select>
                                 </div>
                                 <div className="space-y-2">
                                   <Label className="text-sm font-semibold text-[#1b3a57]">

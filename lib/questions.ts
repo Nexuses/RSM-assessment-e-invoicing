@@ -147,6 +147,18 @@ export const questionsData: Question[] = [
     placeholder: 'Specify ERP or accounting software',
   },
   {
+    id: 'q11',
+    text: 'Does your current system support API connectivity?',
+    subject: 'Part 3: Technical Readiness',
+    responseType: 'select',
+    options: [
+      { value: 'api', label: 'Yes, REST/SOAP APIs are available' },
+      { value: 'sftp', label: 'No, we use SFTP / File exports (CSV/XML)' },
+      { value: 'manual', label: 'No, Manual Only' },
+      { value: 'unknown', label: "I don't know" },
+    ],
+  },
+  {
     id: 'q9_8',
     text: 'Who will handle system integration?',
     subject: 'Part 2A: Additional Implementation Inputs',
@@ -168,26 +180,14 @@ export const questionsData: Question[] = [
     ],
   },
   {
-    id: 'q11',
-    text: 'Does your current system support API connectivity?',
-    subject: 'Part 3: Technical Readiness',
+    id: 'q9_12',
+    text: 'What type of invoice integration do you require?',
+    subject: 'Part 2A: Additional Implementation Inputs',
     responseType: 'select',
     options: [
-      { value: 'api', label: 'Yes, REST/SOAP APIs are available' },
-      { value: 'sftp', label: 'No, we use SFTP / File exports (CSV/XML)' },
-      { value: 'manual', label: 'No, Manual Only' },
-      { value: 'unknown', label: "I don't know" },
-    ],
-  },
-  {
-    id: 'q13',
-    text: 'Do you have an internal IT team capable of managing system integration?',
-    subject: 'Part 3: Technical Readiness',
-    responseType: 'select',
-    options: [
-      { value: 'inhouse', label: 'Yes, in-house team' },
-      { value: 'external', label: 'No, we rely on an external vendor' },
-      { value: 'none', label: 'No IT resources available' },
+      { value: 'sales_only', label: 'Sales invoices only' },
+      { value: 'purchase_only', label: 'Purchase invoices only' },
+      { value: 'both', label: 'Both sales and purchase invoices' },
     ],
   },
   {

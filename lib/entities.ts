@@ -21,6 +21,18 @@ export const TURNOVER_BAND_OPTIONS = [
   { value: 'unknown', label: 'Not sure / To be confirmed' },
 ] as const;
 
+/** Same volume bands as Question 5 (q6) sales outbound volume. */
+export const INVOICE_VOLUME_BAND_OPTIONS = [
+  { value: 'lt_1k', label: 'Less than 1,000 invoices/year' },
+  { value: '1k_10k', label: '1,000 - 10,000 invoices/year' },
+  { value: '10k_100k', label: '10,000 - 100,000 invoices/year' },
+  { value: 'gt_100k', label: '100,000+ invoices/year' },
+] as const;
+
+const INVOICE_VOLUME_VALUES = new Set<string>(
+  INVOICE_VOLUME_BAND_OPTIONS.map((o) => o.value),
+);
+
 export function createEmptyEntity(): EntityRecord {
   return {
     legalName: '',
@@ -69,6 +81,7 @@ export function getEntitiesList(value: string): EntityRecord[] {
 export type ValidateEntitiesOptions = {
   requireLegalName?: boolean;
   requireTurnoverBand?: boolean;
+  requireSalesInvoicesPerYear?: boolean;
 };
 
 export function validateEntities(
@@ -77,6 +90,8 @@ export function validateEntities(
 ): string | null {
   const requireLegalName = options?.requireLegalName ?? true;
   const requireTurnoverBand = options?.requireTurnoverBand ?? true;
+  const requireSalesInvoicesPerYear =
+    options?.requireSalesInvoicesPerYear ?? true;
   const entities = getEntitiesList(value);
 
   for (let i = 0; i < entities.length; i++) {
@@ -92,22 +107,17 @@ export function validateEntities(
     if (requireTurnoverBand && !entity.turnoverBand) {
       return `${label}: Please select an annual turnover band.`;
     }
-    if (!entity.salesInvoicesPerYear.trim()) {
-      return `${label}: Sales invoices per year is required.`;
+    if (
+      requireSalesInvoicesPerYear &&
+      !INVOICE_VOLUME_VALUES.has(entity.salesInvoicesPerYear)
+    ) {
+      return `${label}: Please select sales invoices per year.`;
     }
-    if (!entity.purchaseInvoicesPerYear.trim()) {
-      return `${label}: Purchase invoices per year is required.`;
+    if (!INVOICE_VOLUME_VALUES.has(entity.purchaseInvoicesPerYear)) {
+      return `${label}: Please select purchase invoices per year.`;
     }
     if (!entity.ftaPilotAdoption) {
       return `${label}: Please select FTA pilot / voluntary adoption status.`;
-    }
-    const sales = Number(entity.salesInvoicesPerYear);
-    const purchase = Number(entity.purchaseInvoicesPerYear);
-    if (Number.isNaN(sales) || sales < 0) {
-      return `${label}: Enter a valid sales invoices per year value.`;
-    }
-    if (Number.isNaN(purchase) || purchase < 0) {
-      return `${label}: Enter a valid purchase invoices per year value.`;
     }
   }
 
@@ -129,12 +139,20 @@ export function formatEntitiesDisplay(value: string): string {
         FTA_PILOT_OPTIONS.find((o) => o.value === entity.ftaPilotAdoption)?.label ||
         entity.ftaPilotAdoption ||
         '—';
+      const salesVolume =
+        INVOICE_VOLUME_BAND_OPTIONS.find(
+          (o) => o.value === entity.salesInvoicesPerYear,
+        )?.label || entity.salesInvoicesPerYear.trim();
+      const purchaseVolume =
+        INVOICE_VOLUME_BAND_OPTIONS.find(
+          (o) => o.value === entity.purchaseInvoicesPerYear,
+        )?.label || entity.purchaseInvoicesPerYear.trim();
       return [
         `Entity ${index + 1}: ${entity.legalName.trim()}`,
         `TRN: ${trn}`,
         `Turnover: ${turnover}`,
-        `Sales invoices/year (B2B & B2G): ${entity.salesInvoicesPerYear.trim()}`,
-        `Purchase invoices/year: ${entity.purchaseInvoicesPerYear.trim()}`,
+        `Sales invoices/year (B2B & B2G): ${salesVolume || '—'}`,
+        `Purchase invoices/year: ${purchaseVolume || '—'}`,
         `FTA pilot / voluntary adoption by Jul 2026: ${ftaPilot}`,
       ].join(' | ');
     })
