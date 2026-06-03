@@ -2022,7 +2022,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     try {
       const internalEmailResult = await transporter.sendMail({
         from: process.env.FROM_EMAIL,
-        to: ['e-invoice-inquiry@rsm.ae', 'arpit.m@nexuses.in'],
+        to: 'e-invoice-inquiry@rsm.ae',
         replyTo: 'e-invoice-inquiry@rsm.ae',
         subject: "E-Invoicing Assessment - UAE",
         html: emailContent,
