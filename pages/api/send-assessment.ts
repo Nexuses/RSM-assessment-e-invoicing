@@ -1139,6 +1139,7 @@ async function generatePDFBuffer(
 
     pages.push(createCoverPage());
     pages.push(createOverviewPage());
+    pages.push(createLetterPage());
 
     pages.push(
       React.createElement(Page, { size: "A4", style: styles.page },
@@ -1189,7 +1190,6 @@ async function generatePDFBuffer(
       );
     });
 
-    pages.push(createLetterPage());
     pages.push(createFurtherAssistancePage());
 
     return React.createElement(Document, {}, ...pages);
