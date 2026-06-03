@@ -83,6 +83,18 @@ export const questionsData: Question[] = [
     ],
   },
   {
+    id: 'q6_inbound',
+    text: 'What is your estimated annual volume of Purchasing order excluding imports (Inbound)?',
+    subject: 'Part 2: Volume & Scope',
+    responseType: 'select',
+    options: [
+      { value: 'lt_1k', label: 'Less than 1,000 invoices/year' },
+      { value: '1k_10k', label: '1,000 - 10,000 invoices/year' },
+      { value: '10k_100k', label: '10,000 - 100,000 invoices/year' },
+      { value: 'gt_100k', label: '100,000+ invoices/year' },
+    ],
+  },
+  {
     id: 'q6',
     text: 'What is your estimated annual volume of Sales Invoices (Outbound)?',
     subject: 'Part 2: Volume & Scope',

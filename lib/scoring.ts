@@ -49,7 +49,7 @@ export function getPhaseFromTurnover(answers: Record<string, string>): PhaseReco
 }
 
 const MAX_URGENCY = 23;
-const MAX_COMPLEXITY = 71;
+const MAX_COMPLEXITY = 81;
 
 const urgencyCategory = (score: number): AssessmentAxisResult => {
   if (score >= 18) {
@@ -178,8 +178,8 @@ export function computeAssessment(answers: Record<string, string>): AssessmentRe
   const urgencyScore = q1 + q2 + q3 + q4;
 
   // Axis B (Complexity): Q6 - Q16
-  const q6 = (() => {
-    switch (answers.q6) {
+  const volumeBandScore = (value?: string) => {
+    switch (value) {
       case 'lt_1k':
         return 1;
       case '1k_10k':
@@ -191,7 +191,10 @@ export function computeAssessment(answers: Record<string, string>): AssessmentRe
       default:
         return 0;
     }
-  })();
+  };
+
+  const q6Inbound = volumeBandScore(answers.q6_inbound);
+  const q6 = volumeBandScore(answers.q6);
 
   const q7 = (() => {
     switch (answers.q7) {
@@ -308,7 +311,8 @@ export function computeAssessment(answers: Record<string, string>): AssessmentRe
     }
   })();
 
-  const complexityScore = q6 + q7 + q8 + q9 + q10 + q11 + q12 + q14 + q15 + q16;
+  const complexityScore =
+    q6Inbound + q6 + q7 + q8 + q9 + q10 + q11 + q12 + q14 + q15 + q16;
 
   const urgency = urgencyCategory(urgencyScore);
   const complexity = complexityCategory(complexityScore);

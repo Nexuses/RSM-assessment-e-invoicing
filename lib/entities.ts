@@ -21,7 +21,7 @@ export const TURNOVER_BAND_OPTIONS = [
   { value: 'unknown', label: 'Not sure / To be confirmed' },
 ] as const;
 
-/** Same volume bands as Question 5 (q6) sales outbound volume. */
+/** Same volume bands as inbound (q6_inbound) and sales outbound (q6) volume questions. */
 export const INVOICE_VOLUME_BAND_OPTIONS = [
   { value: 'lt_1k', label: 'Less than 1,000 invoices/year' },
   { value: '1k_10k', label: '1,000 - 10,000 invoices/year' },
