@@ -23,10 +23,10 @@ export const TURNOVER_BAND_OPTIONS = [
 
 /** Same volume bands as inbound (q6_inbound) and sales outbound (q6) volume questions. */
 export const INVOICE_VOLUME_BAND_OPTIONS = [
-  { value: 'lt_1k', label: 'Less than 1,000 invoices/year' },
-  { value: '1k_10k', label: '1,000 - 10,000 invoices/year' },
-  { value: '10k_100k', label: '10,000 - 100,000 invoices/year' },
-  { value: 'gt_100k', label: '100,000+ invoices/year' },
+  { value: '1_3k', label: '1–3k' },
+  { value: '3_5k', label: '3–5k' },
+  { value: '5_7k', label: '5–7k' },
+  { value: '7_10k', label: '7–10k' },
 ] as const;
 
 const INVOICE_VOLUME_VALUES = new Set<string>(
@@ -152,7 +152,7 @@ export function formatEntitiesDisplay(value: string): string {
         `TRN: ${trn}`,
         `Turnover: ${turnover}`,
         `Sales invoices/year (B2B & B2G): ${salesVolume || '—'}`,
-        `Purchase invoices/year: ${purchaseVolume || '—'}`,
+        `Purchase invoices/year (excl. imports): ${purchaseVolume || '—'}`,
         `FTA pilot / voluntary adoption by Jul 2026: ${ftaPilot}`,
       ].join(' | ');
     })

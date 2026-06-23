@@ -1,3 +1,5 @@
+import { INVOICE_VOLUME_BAND_OPTIONS } from '@/lib/entities';
+
 export type ResponseType =
   | 'yesno'
   | 'yesno_details'
@@ -26,6 +28,11 @@ export type Question = {
   /** For yesno_details: label and validation for follow-up list fields */
   detailsKind?: 'countries' | 'branches';
 };
+
+const invoiceVolumeOptions = INVOICE_VOLUME_BAND_OPTIONS.map((option) => ({
+  value: option.value,
+  label: option.label,
+}));
 
 export const questionsData: Question[] = [
   {
@@ -87,24 +94,14 @@ export const questionsData: Question[] = [
     text: 'What is your estimated annual volume of Purchasing order excluding imports (Inbound)?',
     subject: 'Part 2: Volume & Scope',
     responseType: 'select',
-    options: [
-      { value: 'lt_1k', label: 'Less than 1,000 invoices/year' },
-      { value: '1k_10k', label: '1,000 - 10,000 invoices/year' },
-      { value: '10k_100k', label: '10,000 - 100,000 invoices/year' },
-      { value: 'gt_100k', label: '100,000+ invoices/year' },
-    ],
+    options: invoiceVolumeOptions,
   },
   {
     id: 'q6',
     text: 'What is your estimated annual volume of Sales Invoices (Outbound)?',
     subject: 'Part 2: Volume & Scope',
     responseType: 'select',
-    options: [
-      { value: 'lt_1k', label: 'Less than 1,000 invoices/year' },
-      { value: '1k_10k', label: '1,000 - 10,000 invoices/year' },
-      { value: '10k_100k', label: '10,000 - 100,000 invoices/year' },
-      { value: 'gt_100k', label: '100,000+ invoices/year' },
-    ],
+    options: invoiceVolumeOptions,
   },
   {
     id: 'q9',

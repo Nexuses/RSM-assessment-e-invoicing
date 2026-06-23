@@ -180,13 +180,13 @@ export function computeAssessment(answers: Record<string, string>): AssessmentRe
   // Axis B (Complexity): Q6 - Q16
   const volumeBandScore = (value?: string) => {
     switch (value) {
-      case 'lt_1k':
+      case '1_3k':
         return 1;
-      case '1k_10k':
+      case '3_5k':
         return 3;
-      case '10k_100k':
+      case '5_7k':
         return 5;
-      case 'gt_100k':
+      case '7_10k':
         return 10;
       default:
         return 0;
