@@ -936,6 +936,12 @@ async function writeToGoogleSheets(
       return;
     }
 
+    const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID || process.env.GOOGLE_SHEET_ID;
+    if (!spreadsheetId) {
+      console.error('GOOGLE_SHEETS_SPREADSHEET_ID (or GOOGLE_SHEET_ID) environment variable is not set');
+      return;
+    }
+
     // Initialize Google Sheets API
     const auth = new google.auth.GoogleAuth({
       credentials: JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_CREDENTIALS),
@@ -943,7 +949,6 @@ async function writeToGoogleSheets(
     });
 
     const sheets = google.sheets({ version: 'v4', auth });
-    const spreadsheetId = '18RSFaMZJYXHwelMLU8e8lCcEm7WhrSt6dasonxKKjJw';
     const sheetName = 'Sheet1'; // Change if your sheet has a different name
 
     // Get current questions
