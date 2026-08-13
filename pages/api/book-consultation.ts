@@ -18,7 +18,6 @@ interface ConsultationPayload {
   };
 }
 
-const spreadsheetId = process.env.GOOGLE_SHEET_ID || "18RSFaMZJYXHwelMLU8e8lCcEm7WhrSt6dasonxKKjJw";
 const sheetName = "Sheet2";
 
 const columnToLetter = (column: number) => {
@@ -38,6 +37,12 @@ const appendToSheet = async (payload: ConsultationPayload) => {
     // Check if credentials are available
     if (!process.env.GOOGLE_SERVICE_ACCOUNT_CREDENTIALS) {
       console.error('GOOGLE_SERVICE_ACCOUNT_CREDENTIALS environment variable is not set');
+      return;
+    }
+
+    const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID || process.env.GOOGLE_SHEET_ID;
+    if (!spreadsheetId) {
+      console.error('GOOGLE_SHEETS_SPREADSHEET_ID (or GOOGLE_SHEET_ID) environment variable is not set');
       return;
     }
 
