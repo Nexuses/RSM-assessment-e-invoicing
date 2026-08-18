@@ -6,6 +6,8 @@ import { questionsData } from '@/lib/questions';
 import { computeAssessment } from '@/lib/scoring';
 import { google } from 'googleapis';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { db } from '@/lib/db';
+import { formatAnswerValue } from '@/lib/submission-format';
 
 // Define the structure of the request body
 interface AssessmentData {
@@ -1104,25 +1106,56 @@ async function writeToGoogleSheets(
   }
 }
 
+async function createAssessmentSubmission(
+  personalInfo: PersonalInfo,
+  answers: Record<string, string>,
+) {
+  const assessment = computeAssessment(answers);
+
+  return db.assessmentSubmission.create({
+    data: {
+      name: personalInfo.name,
+      email: personalInfo.email,
+      company: personalInfo.company,
+      position: personalInfo.position,
+      phone: personalInfo.phone || null,
+      website: personalInfo.website || null,
+      totalScore: assessment.totalScore,
+      urgencyScore: assessment.urgency.score,
+      urgencyCategory: assessment.urgency.category,
+      complexityScore: assessment.complexity.score,
+      complexityCategory: assessment.complexity.category,
+      eligible: assessment.eligible,
+      answers,
+    },
+  });
+}
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ message: 'Method Not Allowed' })
   }
 
   const { personalInfo, answers } = req.body as AssessmentData
+  if (
+    !personalInfo?.name ||
+    !personalInfo?.email ||
+    !personalInfo?.company ||
+    !personalInfo?.position ||
+    !answers ||
+    typeof answers !== 'object'
+  ) {
+    return res.status(400).json({ message: 'Missing required assessment fields.' });
+  }
+
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(personalInfo.email)) {
+    console.error('Invalid email address:', personalInfo.email);
+    return res.status(400).json({ message: 'Invalid email address provided.' });
+  }
+
   const assessment = computeAssessment(answers);
   const currentQuestions = questionsData;
-
-  // Create a transporter using SMTP
-  const transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: parseInt(process.env.SMTP_PORT || '587'),
-    secure: process.env.SMTP_SECURE === 'true',
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS,
-    },
-  })
 
   // Prepare email content with HTML formatting
   const emailContent = `
@@ -1188,30 +1221,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               </tr>
               ${Object.entries(answers).map(([questionId, answerValue]) => {
                 const question = currentQuestions.find(q => q.id === questionId);
-                let displayAnswer = '';
-                
-                if (question) {
-                  if (question.responseType === 'yesno' || question.responseType === 'select') {
-                    const answer = question.options?.find(opt => opt.value === answerValue);
-                    displayAnswer = answer?.label || answerValue || 'Not answered';
-                  } else if (question.responseType === 'ynlist') {
-                    try {
-                      const ynAnswers = JSON.parse(answerValue as string);
-                      displayAnswer = Object.entries(ynAnswers)
-                        .map(([key, val]) => {
-                          const option = question.options?.find(opt => opt.value === key);
-                          return `${option?.label || key}: ${val}`;
-                        })
-                        .join('; ');
-                    } catch {
-                      displayAnswer = answerValue as string;
-                    }
-                  } else {
-                    displayAnswer = answerValue as string || 'Not answered';
-                  }
-                } else {
-                  displayAnswer = answerValue as string || 'Not answered';
-                }
+                const displayAnswer = formatAnswerValue(questionId, answerValue as string);
                 
                 return `
                   <tr>
@@ -1231,25 +1241,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   let userEmailSent = false;
   
   try {
-    // Validate required environment variables
-    if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASS || !process.env.FROM_EMAIL) {
-      console.error('Missing email configuration:', {
-        SMTP_HOST: !!process.env.SMTP_HOST,
-        SMTP_USER: !!process.env.SMTP_USER,
-        SMTP_PASS: !!process.env.SMTP_PASS,
-        FROM_EMAIL: !!process.env.FROM_EMAIL,
-      });
-      return res.status(500).json({ message: 'Email configuration is missing. Please contact support.' });
-    }
-
-    // Validate email address
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(personalInfo.email)) {
-      console.error('Invalid email address:', personalInfo.email);
-      return res.status(400).json({ message: 'Invalid email address provided.' });
-    }
-
     console.log('Starting assessment processing for:', personalInfo.email, personalInfo.company);
+
+    const submission = await createAssessmentSubmission(personalInfo, answers);
+    console.log('Assessment submission saved to Postgres');
 
     // Generate PDF buffer
     console.log('Generating PDF buffer...');
@@ -1260,6 +1255,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     console.log('Starting S3 upload for company:', personalInfo.company);
     const pdfS3Url = await uploadPDFToS3(pdfBuffer, personalInfo.company, personalInfo);
     console.log('S3 upload result:', pdfS3Url ? 'Success' : 'Failed', pdfS3Url || '');
+    if (pdfS3Url) {
+      await db.assessmentSubmission.update({
+        where: { id: submission.id },
+        data: { pdfS3Url },
+      });
+    }
 
     // Prepare user email content with appointment booking information
     const userEmailContent = `
@@ -1395,70 +1396,75 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       </html>
     `;
 
-    // Verify transporter is configured
-    try {
-      await transporter.verify();
-      console.log('SMTP server connection verified');
-    } catch (verifyError: any) {
-      console.error('SMTP verification failed:', verifyError);
-      console.error('SMTP Config:', {
+    if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS && process.env.FROM_EMAIL) {
+      const transporter = nodemailer.createTransport({
         host: process.env.SMTP_HOST,
-        port: process.env.SMTP_PORT,
-        secure: process.env.SMTP_SECURE,
-        user: process.env.SMTP_USER ? '***' : 'MISSING',
-        pass: process.env.SMTP_PASS ? '***' : 'MISSING',
-        from: process.env.FROM_EMAIL,
+        port: parseInt(process.env.SMTP_PORT || '587'),
+        secure: process.env.SMTP_SECURE === 'true',
+        auth: {
+          user: process.env.SMTP_USER,
+          pass: process.env.SMTP_PASS,
+        },
       });
-      return res.status(500).json({ 
-        message: 'Email server configuration error. Please contact support.',
-        error: process.env.NODE_ENV === 'development' ? String(verifyError) : undefined
-      });
-    }
 
-    // Send email to user with PDF attachment
-    console.log('Sending email to user:', personalInfo.email);
-    try {
-      const userEmailResult = await transporter.sendMail({
-        from: process.env.FROM_EMAIL,
-        to: personalInfo.email,
-        replyTo: 'anisha@cs.rsm.ae',
-        subject: `E-Invoicing Assessment Report – ${personalInfo.company}`,
-        html: userEmailContent,
-        attachments: [
-          {
-            filename: `${personalInfo.company.replace(/[^a-zA-Z0-9]/g, '_')}_E_Invoicing_Assessment_Report.pdf`,
-            content: pdfBuffer,
-            contentType: 'application/pdf',
-          },
-        ],
-      });
-      console.log('User email sent successfully. MessageId:', userEmailResult.messageId);
-      userEmailSent = true;
-    } catch (userEmailError: any) {
-      console.error('Error sending user email:', userEmailError);
-      console.error('Email error details:', {
-        message: userEmailError?.message,
-        code: userEmailError?.code,
-        response: userEmailError?.response,
-        command: userEmailError?.command,
-      });
-      // Continue to send internal email even if user email fails
-    }
+      try {
+        await transporter.verify();
+        console.log('SMTP server connection verified');
+      } catch (verifyError: any) {
+        console.error('SMTP verification failed:', verifyError);
+        console.error('SMTP Config:', {
+          host: process.env.SMTP_HOST,
+          port: process.env.SMTP_PORT,
+          secure: process.env.SMTP_SECURE,
+          user: process.env.SMTP_USER ? '***' : 'MISSING',
+          pass: process.env.SMTP_PASS ? '***' : 'MISSING',
+          from: process.env.FROM_EMAIL,
+        });
+      }
 
-    // Send internal notification email (without PDF)
-    console.log('Sending internal notification email...');
-    try {
-      const internalEmailResult = await transporter.sendMail({
-        from: process.env.FROM_EMAIL,
-        to: "arpit.m@nexuses.in,anisha.a@nexuses.in",
-        replyTo: 'anisha@cs.rsm.ae',
-        subject: "E-Invoicing Assessment - UAE",
-        html: emailContent,
-      });
-      console.log('Internal email sent successfully. MessageId:', internalEmailResult.messageId);
-    } catch (internalEmailError) {
-      console.error('Error sending internal email:', internalEmailError);
-      // Continue even if internal email fails
+      console.log('Sending email to user:', personalInfo.email);
+      try {
+        const userEmailResult = await transporter.sendMail({
+          from: process.env.FROM_EMAIL,
+          to: personalInfo.email,
+          replyTo: 'anisha@cs.rsm.ae',
+          subject: `E-Invoicing Assessment Report – ${personalInfo.company}`,
+          html: userEmailContent,
+          attachments: [
+            {
+              filename: `${personalInfo.company.replace(/[^a-zA-Z0-9]/g, '_')}_E_Invoicing_Assessment_Report.pdf`,
+              content: pdfBuffer,
+              contentType: 'application/pdf',
+            },
+          ],
+        });
+        console.log('User email sent successfully. MessageId:', userEmailResult.messageId);
+        userEmailSent = true;
+      } catch (userEmailError: any) {
+        console.error('Error sending user email:', userEmailError);
+        console.error('Email error details:', {
+          message: userEmailError?.message,
+          code: userEmailError?.code,
+          response: userEmailError?.response,
+          command: userEmailError?.command,
+        });
+      }
+
+      console.log('Sending internal notification email...');
+      try {
+        const internalEmailResult = await transporter.sendMail({
+          from: process.env.FROM_EMAIL,
+          to: "arpit.m@nexuses.in,anisha.a@nexuses.in",
+          replyTo: 'anisha@cs.rsm.ae',
+          subject: "E-Invoicing Assessment - UAE",
+          html: emailContent,
+        });
+        console.log('Internal email sent successfully. MessageId:', internalEmailResult.messageId);
+      } catch (internalEmailError) {
+        console.error('Error sending internal email:', internalEmailError);
+      }
+    } else {
+      console.warn('Skipping assessment emails because SMTP environment variables are missing');
     }
 
     // Write assessment data to Google Sheets

@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import nodemailer from "nodemailer";
 import { google } from "googleapis";
+import { db } from "@/lib/db";
 
 interface ConsultationPayload {
   firstName: string;
@@ -118,6 +119,18 @@ const buildTransporter = () =>
     },
   });
 
+const createConsultationRequest = async (payload: ConsultationPayload) =>
+  db.consultationRequest.create({
+    data: {
+      firstName: payload.firstName,
+      lastName: payload.lastName,
+      email: payload.email,
+      phone: payload.phone || null,
+      company: payload.context?.personalInfo?.company || null,
+      score: typeof payload.context?.score === "number" ? payload.context.score : null,
+    },
+  });
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "POST") {
     return res.status(405).json({ message: "Method Not Allowed" });
@@ -129,8 +142,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ message: "Missing required fields." });
   }
 
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email)) {
+    return res.status(400).json({ message: "Invalid email address provided." });
+  }
+
   try {
-    const transporter = buildTransporter();
+    await createConsultationRequest({ firstName, lastName, email, phone, context });
+
     const adminRecipients =
       process.env.CONSULTATION_RECIPIENTS ||
       "arpit.m@nexuses.in, anisha@cs.rsm.ae, anisha.a@nexuses.in, GRC-Inquiry@RSM.ae, rsm-tech-aaaahib5qyhpf2k6egbqwrugwa@nexuses.slack.com";
@@ -321,22 +340,40 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       </html>
     `;
 
-    await transporter.sendMail({
-      from: process.env.FROM_EMAIL,
-      to: adminRecipients,
-      subject: "New consultation request from assessment summary",
-      html: adminHtml,
-    });
+    if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS && process.env.FROM_EMAIL) {
+      const transporter = buildTransporter();
 
-    await transporter.sendMail({
-      from: process.env.FROM_EMAIL,
-      to: email,
-      replyTo: "cybersecurity@rsm.com.kw",
-      subject: "Thank you for booking a consultation with RSM",
-      html: userHtml,
-    });
+      try {
+        await transporter.sendMail({
+          from: process.env.FROM_EMAIL,
+          to: adminRecipients,
+          subject: "New consultation request from assessment summary",
+          html: adminHtml,
+        });
+      } catch (error) {
+        console.error("Failed to send consultation admin email:", error);
+      }
 
-    await appendToSheet({ firstName, lastName, email, phone: phone || "", context });
+      try {
+        await transporter.sendMail({
+          from: process.env.FROM_EMAIL,
+          to: email,
+          replyTo: "cybersecurity@rsm.com.kw",
+          subject: "Thank you for booking a consultation with RSM",
+          html: userHtml,
+        });
+      } catch (error) {
+        console.error("Failed to send consultation confirmation email:", error);
+      }
+    } else {
+      console.warn("Skipping consultation emails because SMTP environment variables are missing");
+    }
+
+    try {
+      await appendToSheet({ firstName, lastName, email, phone: phone || "", context });
+    } catch (error) {
+      console.error("Failed to write consultation request to Google Sheets:", error);
+    }
 
     return res.status(200).json({ message: "Consultation request submitted successfully." });
   } catch (error) {
