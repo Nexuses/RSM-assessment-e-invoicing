@@ -236,3 +236,35 @@ pm2 restart rsm-e-invoicing
 | Emails not sending | SMTP vars, SES sandbox / verified identity, `FROM_EMAIL` |
 | PDF / timeout errors | 2 GB RAM; nginx `proxy_read_timeout 60s` is in the site config |
 | 502 Bad Gateway | `pm2 status` — app must be online on port 3000 |
+
+### Site does not open on HTTP or the IP (before or after certbot)
+
+Do **not** retry certbot until HTTP works. Certbot needs port 80 reachable from the internet.
+
+On the VPS, in order:
+
+```bash
+pm2 status
+curl -I http://127.0.0.1:3000
+sudo systemctl status nginx --no-pager
+sudo nginx -t
+curl -I http://127.0.0.1
+sudo ufw status
+sudo ss -tlnp | grep -E ':80|:3000'
+```
+
+- If PM2 is empty: `cd /var/www/rsm-e-invoicing && pm2 start ecosystem.config.cjs`
+- If `nginx -t` fails after a certbot error, restore HTTP-only config:
+
+```bash
+sudo cp /var/www/rsm-e-invoicing/deploy/nginx.conf.example /etc/nginx/sites-available/rsm-e-invoicing
+sudo nano /etc/nginx/sites-available/rsm-e-invoicing   # real domain, not YOUR_DOMAIN
+sudo rm -f /etc/nginx/sites-enabled/default
+sudo ln -sf /etc/nginx/sites-available/rsm-e-invoicing /etc/nginx/sites-enabled/rsm-e-invoicing
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+- In the browser use `http://YOUR_VPS_IP` (not `https://`).
+- Also open **80** and **443** in the cloud provider firewall / security group (DigitalOcean, Hetzner, AWS, etc.). UFW is not enough if that panel still blocks inbound 80.
+
+Only when `http://YOUR_VPS_IP` loads, run certbot. Use the domain that already has an A record; omit `-d www.YOUR_DOMAIN` if `www` is not in DNS yet.

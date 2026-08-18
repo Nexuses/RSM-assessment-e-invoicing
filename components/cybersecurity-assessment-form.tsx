@@ -958,17 +958,18 @@ export function CybersecurityAssessmentForm() {
                         </div>
                       );
                     } else if (currentQ.responseType === 'multiselect') {
-                      // Multi-select - checkboxes
+                      // Multi-select - checkboxes with card styling
                       const selectedValues = typeof currentAnswer === 'string' && currentAnswer ? currentAnswer.split(',').filter(Boolean) : [];
                       return (
-                        <div className="space-y-3">
+                        <div className="flex flex-col gap-4">
                           {currentQ.options?.map((option) => {
                             const isSelected = selectedValues.includes(option.value);
+                            const id = `${currentQ.id}-${option.value}`;
                             return (
-                              <div key={option.value} className="flex items-center gap-3">
+                              <div key={option.value} className="flex-1">
                                 <input
                                   type="checkbox"
-                                  id={`${currentQ.id}-${option.value}`}
+                                  id={id}
                                   checked={isSelected}
                                   onChange={(e) => {
                                     const newValues = e.target.checked
@@ -976,13 +977,33 @@ export function CybersecurityAssessmentForm() {
                                       : selectedValues.filter(v => v !== option.value);
                                     handleAnswerChange(currentQ.id, newValues.join(','));
                                   }}
-                                  className="h-5 w-5 rounded border-gray-300 text-[#00AEEF] focus:ring-[#00AEEF]"
+                                  className="sr-only"
                                 />
                                 <Label
-                                  htmlFor={`${currentQ.id}-${option.value}`}
-                                  className="text-sm font-medium text-gray-700 cursor-pointer"
+                                  htmlFor={id}
+                                  className={cn(
+                                    "flex w-full items-center gap-4 rounded-2xl border bg-white px-5 py-4 text-sm font-medium text-gray-700 shadow-sm transition-all focus:outline-none cursor-pointer",
+                                    !isSelected && "border-gray-200 hover:border-[#00AEEF] hover:shadow-lg",
+                                    isSelected && "border-[#00AEEF] bg-gradient-to-r from-[#00AEEF] to-[#0091cf] text-white shadow-[0_12px_30px_rgba(0,174,239,0.22)]",
+                                  )}
                                 >
-                                  {option.label}
+                                  <span
+                                    className={cn(
+                                      "flex h-6 w-6 items-center justify-center rounded border-2 border-gray-300 transition-colors",
+                                      isSelected && "border-white bg-white",
+                                    )}
+                                  >
+                                    <Check
+                                      className={cn(
+                                        "h-3.5 w-3.5 transition-opacity",
+                                        isSelected ? "text-[#00AEEF] opacity-100" : "opacity-0",
+                                      )}
+                                    />
+                                  </span>
+                                  <span className={cn(
+                                    "flex-1 text-left",
+                                    isSelected && "text-white font-semibold",
+                                  )}>{option.label}</span>
                                 </Label>
                               </div>
                             );
