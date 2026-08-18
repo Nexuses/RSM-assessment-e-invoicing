@@ -1,8 +1,8 @@
 # Deploy on a VPS (PM2 + nginx + HTTPS)
 
-This app is a Next.js 14 site. There is **no SQL database**. Assessment and consultation rows go to **Google Sheets**; PDF reports go to **AWS S3**; email goes out over **SMTP** (typically Amazon SES).
+This app is a Next.js 14 site. Assessment and consultation rows are now stored in **Postgres**. Google Sheets remains a best-effort mirror; PDF reports still go to **AWS S3**; email still goes out over **SMTP** (typically Amazon SES).
 
-Docker is not required.
+Docker is required for the Postgres service, but the Next.js app still runs directly on the host with PM2.
 
 **Baseline:** Ubuntu 22.04 or 24.04, 1+ vCPU, **2 GB RAM** preferred (PDF generation), Node.js **20 LTS**, nginx, certbot, PM2.
 
@@ -24,7 +24,7 @@ dig +short YOUR_DOMAIN
 
 ```bash
 sudo apt update && sudo apt upgrade -y
-sudo apt install -y git nginx certbot python3-certbot-nginx curl ufw
+sudo apt install -y git nginx certbot python3-certbot-nginx curl ufw docker.io docker-compose-plugin
 ```
 
 Node.js 20 LTS (NodeSource):
@@ -110,6 +110,8 @@ Fill every required key:
 
 | Variable | Purpose |
 |---|---|
+| `DATABASE_URL` | Postgres connection string used by Prisma |
+| `SUBMISSIONS_PASSWORD` | Shared password for `/submissions` |
 | `GOOGLE_SERVICE_ACCOUNT_CREDENTIALS` | Service account JSON as a **single line** |
 | `GOOGLE_SHEETS_SPREADSHEET_ID` | Spreadsheet ID (Sheet1 = assessments, Sheet2 = consultations) |
 | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` / `AWS_S3_BUCKET_NAME` / `AWS_REGION` | PDF uploads |
@@ -123,17 +125,30 @@ Keep `.env` on the server only. It is gitignored and must never be committed.
 
 ---
 
-## 5. Build
+## 5. Start Postgres
+
+```bash
+cd /var/www/rsm-e-invoicing
+docker compose up -d
+docker compose ps
+```
+
+If your Docker install does not provide the Compose plugin, `npm run db:up` also falls back to `docker-compose`.
+
+---
+
+## 6. Build and migrate
 
 ```bash
 cd /var/www/rsm-e-invoicing
 npm ci
+npx prisma migrate deploy
 npm run build
 ```
 
 ---
 
-## 6. Firewall
+## 7. Firewall
 
 Allow SSH and nginx only. Do **not** expose port 3000 publicly.
 
@@ -146,7 +161,7 @@ sudo ufw status
 
 ---
 
-## 7. PM2
+## 8. PM2
 
 ```bash
 cd /var/www/rsm-e-invoicing
@@ -169,7 +184,7 @@ The app listens on `127.0.0.1:3000`. Secrets stay in `.env`; Next.js loads that 
 
 ---
 
-## 8. nginx
+## 9. nginx
 
 ```bash
 sudo cp /var/www/rsm-e-invoicing/deploy/nginx.conf.example /etc/nginx/sites-available/rsm-e-invoicing
@@ -188,7 +203,7 @@ sudo nginx -t && sudo systemctl reload nginx
 
 ---
 
-## 9. HTTPS
+## 10. HTTPS
 
 DNS must already point at this server.
 
@@ -204,16 +219,17 @@ sudo certbot renew --dry-run
 
 ---
 
-## 10. Smoke test
+## 11. Smoke test
 
 1. Open `https://YOUR_DOMAIN`
-2. Submit a test assessment — user email with PDF, internal email, Sheet1 row, S3 object
-3. Submit a test consultation — confirmation email, admin email, Sheet2 row
+2. Submit a test assessment — Postgres row, user email with PDF, internal email, Sheet1 row, S3 object
+3. Submit a test consultation — Postgres row, confirmation email, admin email, Sheet2 row
+4. Open `https://YOUR_DOMAIN/submissions` and confirm the shared password gate works, the assessment appears in the first tab, and the consultation appears in the second tab
 4. If anything fails: `pm2 logs rsm-e-invoicing`
 
 ---
 
-## 11. Later updates
+## 12. Later updates
 
 Uses the same deploy key; no extra GitHub auth.
 
@@ -221,6 +237,7 @@ Uses the same deploy key; no extra GitHub auth.
 cd /var/www/rsm-e-invoicing
 git pull
 npm ci
+npx prisma migrate deploy
 npm run build
 pm2 restart rsm-e-invoicing
 ```
@@ -231,6 +248,8 @@ pm2 restart rsm-e-invoicing
 
 | Symptom | Check |
 |---|---|
+| Prisma migration fails | `DATABASE_URL` points at the Docker Postgres container; `docker compose ps`; `docker compose logs postgres` |
+| `/submissions` says unauthorized | `SUBMISSIONS_PASSWORD` is set in `.env`; clear cookies and sign in again |
 | `Permission denied (publickey)` on clone/pull | Public key is a **Deploy key** on this repo; `IdentityFile` in `~/.ssh/config` matches the private key; `ssh -T git@github.com` |
 | Sheets not updating | `GOOGLE_SHEETS_SPREADSHEET_ID` is set; service account has Editor access; `pm2 logs` |
 | Emails not sending | SMTP vars, SES sandbox / verified identity, `FROM_EMAIL` |
