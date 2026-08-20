@@ -8,7 +8,9 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-rsm}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rsm}
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      # Bind to localhost only — the Next.js app runs on the same host (PM2).
+      # Do not expose 5432 on 0.0.0.0 / the public internet.
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
 

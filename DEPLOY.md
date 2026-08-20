@@ -20,12 +20,20 @@ dig +short YOUR_DOMAIN
 
 ---
 
+
+
 ## 2. Install packages
 
 ```bash
 sudo apt update && sudo apt upgrade -y
-sudo apt install -y git nginx certbot python3-certbot-nginx curl ufw docker.io docker-compose-plugin
+sudo apt install -y git nginx certbot python3-certbot-nginx curl ufw docker.io docker-compose
+sudo systemctl enable --now docker
+sudo usermod -aG docker "$USER"
 ```
+
+Ubuntu’s default repos ship Compose v1 as `docker-compose` (hyphen). Do **not** install `docker-compose-plugin`; that package only exists after adding Docker’s own apt repo.
+
+After adding yourself to the `docker` group, **log out and SSH back in** (or run `newgrp docker`) so the group takes effect. Until then, `docker` / `docker-compose` will fail with `Permission denied` on `/var/run/docker.sock`.
 
 Node.js 20 LTS (NodeSource):
 
@@ -42,6 +50,8 @@ sudo npm i -g pm2
 ```
 
 ---
+
+
 
 ## 3. GitHub deploy key (private repo)
 
@@ -85,7 +95,7 @@ ssh -T git@github.com
 
 sudo mkdir -p /var/www
 sudo chown "$USER:$USER" /var/www
-git clone git@github.com:YOUR_ORG/RSM-assessment-e-invoicing-1.git /var/www/rsm-e-invoicing
+git clone git@github.com:YOUR_ORG/RSM-assessment-e-invoicing-1.git /var/www/RSM-assessment-e-invoicing
 ```
 
 Clone **without** `sudo`. `sudo git clone` runs as root and will not use `/home/RSMae/.ssh/`.
@@ -98,24 +108,28 @@ Clone **without** `sudo`. `sudo git clone` runs as root and will not use `/home/
 
 ---
 
+
+
 ## 4. Environment
 
 ```bash
-cd /var/www/rsm-e-invoicing
+cd /var/www/RSM-assessment-e-invoicing
 cp .env.example .env
 nano .env
 ```
 
 Fill every required key:
 
-| Variable | Purpose |
-|---|---|
-| `DATABASE_URL` | Postgres connection string used by Prisma |
-| `SUBMISSIONS_PASSWORD` | Shared password for `/submissions` |
-| `GOOGLE_SERVICE_ACCOUNT_CREDENTIALS` | Service account JSON as a **single line** |
-| `GOOGLE_SHEETS_SPREADSHEET_ID` | Spreadsheet ID (Sheet1 = assessments, Sheet2 = consultations) |
-| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` / `AWS_S3_BUCKET_NAME` / `AWS_REGION` | PDF uploads |
-| `FROM_EMAIL` / `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` / `SMTP_SECURE` | Outbound email |
+
+| Variable                                                                             | Purpose                                                       |
+| ------------------------------------------------------------------------------------ | ------------------------------------------------------------- |
+| `DATABASE_URL`                                                                       | Postgres connection string used by Prisma                     |
+| `SUBMISSIONS_PASSWORD`                                                               | Shared password for `/submissions`                            |
+| `GOOGLE_SERVICE_ACCOUNT_CREDENTIALS`                                                 | Service account JSON as a **single line**                     |
+| `GOOGLE_SHEETS_SPREADSHEET_ID`                                                       | Spreadsheet ID (Sheet1 = assessments, Sheet2 = consultations) |
+| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` / `AWS_S3_BUCKET_NAME` / `AWS_REGION`  | PDF uploads                                                   |
+| `FROM_EMAIL` / `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` / `SMTP_SECURE` | Outbound email                                                |
+
 
 Optional: `CONSULTATION_RECIPIENTS` (comma-separated admin emails).
 
@@ -125,28 +139,43 @@ Keep `.env` on the server only. It is gitignored and must never be committed.
 
 ---
 
+
+
 ## 5. Start Postgres
 
 ```bash
-cd /var/www/rsm-e-invoicing
-docker compose up -d
-docker compose ps
+cd /var/www/RSM-assessment-e-invoicing
+docker-compose up -d
+docker-compose ps
 ```
 
-If your Docker install does not provide the Compose plugin, `npm run db:up` also falls back to `docker-compose`.
+Postgres is published on **`127.0.0.1:5432` only** (not `0.0.0.0`). The app on the same VPS can still use `DATABASE_URL=...@localhost:5432/...`. Do **not** open port 5432 in UFW or the cloud firewall.
+
+If you see `Permission denied` connecting to the Docker socket, either SSH out and back in after `usermod -aG docker`, or run once with sudo:
+
+```bash
+sudo docker-compose up -d
+sudo docker-compose ps
+```
+
+`npm run db:up` also works; it tries `docker compose` first, then `docker-compose`.
 
 ---
+
+
 
 ## 6. Build and migrate
 
 ```bash
-cd /var/www/rsm-e-invoicing
+cd /var/www/RSM-assessment-e-invoicing
 npm ci
 npx prisma migrate deploy
 npm run build
 ```
 
 ---
+
+
 
 ## 7. Firewall
 
@@ -161,10 +190,12 @@ sudo ufw status
 
 ---
 
+
+
 ## 8. PM2
 
 ```bash
-cd /var/www/rsm-e-invoicing
+cd /var/www/RSM-assessment-e-invoicing
 pm2 start ecosystem.config.cjs
 pm2 save
 pm2 startup
@@ -184,10 +215,12 @@ The app listens on `127.0.0.1:3000`. Secrets stay in `.env`; Next.js loads that 
 
 ---
 
+
+
 ## 9. nginx
 
 ```bash
-sudo cp /var/www/rsm-e-invoicing/deploy/nginx.conf.example /etc/nginx/sites-available/rsm-e-invoicing
+sudo cp /var/www/RSM-assessment-e-invoicing/deploy/nginx.conf.example /etc/nginx/sites-available/rsm-e-invoicing
 sudo nano /etc/nginx/sites-available/rsm-e-invoicing   # replace YOUR_DOMAIN
 sudo ln -s /etc/nginx/sites-available/rsm-e-invoicing /etc/nginx/sites-enabled/
 sudo nginx -t
@@ -202,6 +235,8 @@ sudo nginx -t && sudo systemctl reload nginx
 ```
 
 ---
+
+
 
 ## 10. HTTPS
 
@@ -219,22 +254,26 @@ sudo certbot renew --dry-run
 
 ---
 
+
+
 ## 11. Smoke test
 
 1. Open `https://YOUR_DOMAIN`
 2. Submit a test assessment — Postgres row, user email with PDF, internal email, Sheet1 row, S3 object
 3. Submit a test consultation — Postgres row, confirmation email, admin email, Sheet2 row
 4. Open `https://YOUR_DOMAIN/submissions` and confirm the shared password gate works, the assessment appears in the first tab, and the consultation appears in the second tab
-4. If anything fails: `pm2 logs rsm-e-invoicing`
+5. If anything fails: `pm2 logs rsm-e-invoicing`
 
 ---
+
+
 
 ## 12. Later updates
 
 Uses the same deploy key; no extra GitHub auth.
 
 ```bash
-cd /var/www/rsm-e-invoicing
+cd /var/www/RSM-assessment-e-invoicing
 git pull
 npm ci
 npx prisma migrate deploy
@@ -244,17 +283,24 @@ pm2 restart rsm-e-invoicing
 
 ---
 
+
+
 ## Troubleshooting
 
-| Symptom | Check |
-|---|---|
-| Prisma migration fails | `DATABASE_URL` points at the Docker Postgres container; `docker compose ps`; `docker compose logs postgres` |
-| `/submissions` says unauthorized | `SUBMISSIONS_PASSWORD` is set in `.env`; clear cookies and sign in again |
+
+| Symptom                                       | Check                                                                                                                           |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| Prisma migration fails                        | `DATABASE_URL` points at the Docker Postgres container; `docker-compose ps`; `docker-compose logs postgres`                     |
+| `docker-compose`: Permission denied on socket | User is not in the `docker` group yet. `sudo usermod -aG docker $USER`, then log out/in, or run `sudo docker-compose up -d`     |
+| `/submissions` says unauthorized              | `SUBMISSIONS_PASSWORD` is set in `.env`; clear cookies and sign in again                                                        |
 | `Permission denied (publickey)` on clone/pull | Public key is a **Deploy key** on this repo; `IdentityFile` in `~/.ssh/config` matches the private key; `ssh -T git@github.com` |
-| Sheets not updating | `GOOGLE_SHEETS_SPREADSHEET_ID` is set; service account has Editor access; `pm2 logs` |
-| Emails not sending | SMTP vars, SES sandbox / verified identity, `FROM_EMAIL` |
-| PDF / timeout errors | 2 GB RAM; nginx `proxy_read_timeout 60s` is in the site config |
-| 502 Bad Gateway | `pm2 status` — app must be online on port 3000 |
+| Sheets not updating                           | `GOOGLE_SHEETS_SPREADSHEET_ID` is set; service account has Editor access; `pm2 logs`                                            |
+| Emails not sending                            | SMTP vars, SES sandbox / verified identity, `FROM_EMAIL`                                                                        |
+| PDF / timeout errors                          | 2 GB RAM; nginx `proxy_read_timeout 60s` is in the site config                                                                  |
+| 502 Bad Gateway                               | `pm2 status` — app must be online on port 3000                                                                                  |
+
+
+
 
 ### Site does not open on HTTP or the IP (before or after certbot)
 
@@ -272,11 +318,11 @@ sudo ufw status
 sudo ss -tlnp | grep -E ':80|:3000'
 ```
 
-- If PM2 is empty: `cd /var/www/rsm-e-invoicing && pm2 start ecosystem.config.cjs`
+- If PM2 is empty: `cd /var/www/RSM-assessment-e-invoicing && pm2 start ecosystem.config.cjs`
 - If `nginx -t` fails after a certbot error, restore HTTP-only config:
 
 ```bash
-sudo cp /var/www/rsm-e-invoicing/deploy/nginx.conf.example /etc/nginx/sites-available/rsm-e-invoicing
+sudo cp /var/www/RSM-assessment-e-invoicing/deploy/nginx.conf.example /etc/nginx/sites-available/rsm-e-invoicing
 sudo nano /etc/nginx/sites-available/rsm-e-invoicing   # real domain, not YOUR_DOMAIN
 sudo rm -f /etc/nginx/sites-enabled/default
 sudo ln -sf /etc/nginx/sites-available/rsm-e-invoicing /etc/nginx/sites-enabled/rsm-e-invoicing
