@@ -151,6 +151,15 @@ docker-compose ps
 
 Postgres is published on **`127.0.0.1:5432` only** (not `0.0.0.0`). The app on the same VPS can still use `DATABASE_URL=...@localhost:5432/...`. Do **not** open port 5432 in UFW or the cloud firewall.
 
+If recreate fails with `KeyError: 'ContainerConfig'` (common with Ubuntu’s `docker-compose` 1.29.x + a newer Docker Engine), remove the old container and start again — the named volume keeps your data:
+
+```bash
+sudo docker stop rsm-assessments-postgres
+sudo docker rm rsm-assessments-postgres
+sudo docker-compose up -d
+sudo docker-compose ps
+```
+
 If you see `Permission denied` connecting to the Docker socket, either SSH out and back in after `usermod -aG docker`, or run once with sudo:
 
 ```bash
@@ -159,6 +168,38 @@ sudo docker-compose ps
 ```
 
 `npm run db:up` also works; it tries `docker compose` first, then `docker-compose`.
+
+### Shared Postgres for multiple assessment apps (recommended on 4GB)
+
+Run **one** Postgres container for all apps on this VPS. Each app gets its own database name, not its own container.
+
+1. Keep this compose file as the single DB service (`127.0.0.1:5432`).
+2. Create another database for a second app:
+
+```bash
+sudo docker exec -it rsm-assessments-postgres \
+  psql -U rsm -d rsm_assessments \
+  -c "CREATE DATABASE other_app_assessments OWNER rsm;"
+```
+
+3. In the other app’s `.env`:
+
+```bash
+DATABASE_URL=postgresql://rsm:YOUR_PASSWORD@localhost:5432/other_app_assessments?schema=public
+```
+
+4. Run that app’s migrations from its own directory: `npx prisma migrate deploy`.
+
+Do **not** start a second `postgres` container on another port unless you have spare RAM.
+
+The compose file caps Postgres at **512MB** (`mem_limit`) and lowers `shared_buffers` / `work_mem` / `max_connections` for a small shared VPS.
+
+After pulling these settings, recreate the container once (volume keeps data):
+
+```bash
+sudo docker rm -f rsm-assessments-postgres
+sudo docker-compose up -d
+```
 
 ---
 
@@ -292,6 +333,7 @@ pm2 restart rsm-e-invoicing
 | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
 | Prisma migration fails                        | `DATABASE_URL` points at the Docker Postgres container; `docker-compose ps`; `docker-compose logs postgres`                     |
 | `docker-compose`: Permission denied on socket | User is not in the `docker` group yet. `sudo usermod -aG docker $USER`, then log out/in, or run `sudo docker-compose up -d`     |
+| `KeyError: 'ContainerConfig'` on recreate     | Old `docker-compose` 1.29 bug. `docker stop` + `docker rm` the postgres container, then `docker-compose up -d` (volume keeps DB) |
 | `/submissions` says unauthorized              | `SUBMISSIONS_PASSWORD` is set in `.env`; clear cookies and sign in again                                                        |
 | `Permission denied (publickey)` on clone/pull | Public key is a **Deploy key** on this repo; `IdentityFile` in `~/.ssh/config` matches the private key; `ssh -T git@github.com` |
 | Sheets not updating                           | `GOOGLE_SHEETS_SPREADSHEET_ID` is set; service account has Editor access; `pm2 logs`                                            |
