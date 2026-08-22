@@ -39,6 +39,7 @@ import {
 } from "./ui/form";
 import styles from "@/styles/CybersecurityAssessmentForm.module.css";
 import { questionsData, Question } from '@/lib/questions';
+import { PUBLIC_INQUIRY_EMAIL } from '@/lib/email-config';
 import { computeAssessment, type AssessmentResult } from "@/lib/scoring";
 import {
   createEmptyEntity,
@@ -749,10 +750,10 @@ export function CybersecurityAssessmentForm() {
                     <p className="text-sm sm:text-base text-gray-700 leading-relaxed">
                       If you have any questions or would like to learn more about UAE E-Invoicing requirements, please feel free to contact us at{" "}
                       <a
-                        href="mailto:e-invoice-inquiry@rsm.ae"
+                        href={`mailto:${PUBLIC_INQUIRY_EMAIL}`}
                         className="font-semibold text-[#00AEEF] hover:underline"
                       >
-                        e-invoice-inquiry@rsm.ae
+                        {PUBLIC_INQUIRY_EMAIL}
                       </a>
                     </p>
                   </motion.div>
@@ -2067,7 +2068,7 @@ export function CybersecurityAssessmentForm() {
                         className="mt-4 px-6 py-4 text-center"
                       >
                         <p className="text-sm sm:text-base text-gray-700">
-                          If you have any questions or would like to learn more about UAE E-Invoicing requirements, please feel free to contact us at <a href="mailto:e-invoice-inquiry@rsm.ae" className="font-semibold text-[#009cde] hover:underline">e-invoice-inquiry@rsm.ae</a>.
+                          If you have any questions or would like to learn more about UAE E-Invoicing requirements, please feel free to contact us at <a href={`mailto:${PUBLIC_INQUIRY_EMAIL}`} className="font-semibold text-[#009cde] hover:underline">{PUBLIC_INQUIRY_EMAIL}</a>.
                         </p>
                       </motion.div>
 

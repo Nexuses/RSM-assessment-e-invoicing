@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import React from 'react';
 import { Document, Page, Text, View, StyleSheet, pdf, Image } from '@react-pdf/renderer';
+import { getInquiryEmail } from '@/lib/email-config';
 import { questionsData } from '@/lib/questions';
 import { computeAssessment } from '@/lib/scoring';
 import { formatEntitiesDisplay } from '@/lib/entities';
@@ -617,7 +618,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             // Contact Information Section
             React.createElement(View, { style: styles.section },
               React.createElement(Text, { style: styles.contactText },
-                "If you have any questions or would like to learn more about UAE E-Invoicing requirements, please feel free to contact us at e-invoice-inquiry@rsm.ae"
+                `If you have any questions or would like to learn more about UAE E-Invoicing requirements, please feel free to contact us at ${getInquiryEmail()}`
               )
             )
           )

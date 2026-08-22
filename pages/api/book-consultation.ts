@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import nodemailer from "nodemailer";
 import { google } from "googleapis";
+import { getConsultationRecipients, getReplyToEmail } from "@/lib/email-config";
 
 interface ConsultationPayload {
   firstName: string;
@@ -134,9 +135,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     const transporter = buildTransporter();
-    const adminRecipients =
-      process.env.CONSULTATION_RECIPIENTS ||
-      "anisha@cs.rsm.ae, GRC-Inquiry@RSM.ae, rsm-tech-aaaahib5qyhpf2k6egbqwrugwa@nexuses.slack.com";
+    const adminRecipients = getConsultationRecipients();
 
     const adminHtml = `
       <!DOCTYPE html>
@@ -334,7 +333,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     await transporter.sendMail({
       from: process.env.FROM_EMAIL,
       to: email,
-      replyTo: "cybersecurity@rsm.com.kw",
+      replyTo: getReplyToEmail(),
       subject: "Thank you for booking a consultation with RSM",
       html: userHtml,
     });

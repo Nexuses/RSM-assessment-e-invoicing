@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
 import nodemailer from 'nodemailer'
+import { getInternalAssessmentRecipients, getReplyToEmail } from '@/lib/email-config';
 import React from 'react';
 import { Document, Page, Text, View, StyleSheet, pdf, Image } from '@react-pdf/renderer';
 import { questionsData } from '@/lib/questions';
@@ -1987,7 +1988,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const userEmailResult = await transporter.sendMail({
         from: process.env.FROM_EMAIL,
         to: personalInfo.email,
-        replyTo: 'e-invoice-inquiry@rsm.ae',
+        replyTo: getReplyToEmail(),
         subject: `E-Invoicing Assessment Report – ${personalInfo.company}`,
         html: userEmailContent,
         attachments: [
@@ -2016,8 +2017,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     try {
       const internalEmailResult = await transporter.sendMail({
         from: process.env.FROM_EMAIL,
-        to: 'e-invoice-inquiry@rsm.ae',
-        replyTo: 'e-invoice-inquiry@rsm.ae',
+        to: getInternalAssessmentRecipients(),
+        replyTo: getReplyToEmail(),
         subject: "E-Invoicing Assessment - UAE",
         html: emailContent,
         attachments: [
