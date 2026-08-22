@@ -4,6 +4,8 @@ This app is a Next.js 14 site. Assessment and consultation rows are now stored i
 
 Docker is required for the Postgres service, but the Next.js app still runs directly on the host with PM2.
 
+**Adding more assessment apps on this same VPS?** Read **[SHARED-INFRA.md](SHARED-INFRA.md)** first. It documents the shared Postgres instance, port/DB naming rules, RAM limits, and the checklist so other repos do not start a second database container.
+
 **Baseline:** Ubuntu 22.04 or 24.04, 1+ vCPU, **2 GB RAM** preferred (PDF generation), Node.js **20 LTS**, nginx, certbot, PM2.
 
 Replace `YOUR_DOMAIN` and `YOUR_ORG` below with your values.
