@@ -1,13 +1,17 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
 import nodemailer from 'nodemailer'
+import { getInternalAssessmentRecipients, getReplyToEmail } from '@/lib/email-config';
 import React from 'react';
 import { Document, Page, Text, View, StyleSheet, pdf, Image } from '@react-pdf/renderer';
 import { questionsData } from '@/lib/questions';
 import { computeAssessment } from '@/lib/scoring';
+import { formatEntitiesDisplay } from '@/lib/entities';
+import { formatYesNoDetailsDisplay } from '@/lib/yesno-details';
+import { formatSelectOtherDisplay } from '@/lib/select-other';
+import { formatSelectCountriesDisplay } from '@/lib/select-countries';
 import { google } from 'googleapis';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { db } from '@/lib/db';
-import { formatAnswerValue } from '@/lib/submission-format';
 
 // Define the structure of the request body
 interface AssessmentData {
@@ -44,16 +48,163 @@ const createStyles = () => StyleSheet.create({
     color: '#757574',
     position: 'relative',
   },
-  fullPageImageContainer: {
-    width: 595.28, // A4 width in points
-    height: 841.89, // A4 height in points
-    display: 'flex',
-    justifyContent: 'center',
+  coverPage: {
+    flexDirection: 'column',
+    backgroundColor: '#ffffff',
+    flex: 1,
+  },
+  coverHeaderBand: {
+    backgroundColor: '#009CD9',
+    paddingTop: 22,
+    paddingBottom: 20,
+    paddingHorizontal: 48,
     alignItems: 'center',
   },
-  fullPageImage: {
-    width: 595.28, // A4 width in points
-    height: 841.89, // A4 height in points
+  coverLogoWrap: {
+    backgroundColor: '#ffffff',
+    borderRadius: 8,
+    padding: 12,
+    overflow: 'hidden',
+    marginBottom: 8,
+  },
+  coverLogo: {
+    width: 90,
+    height: 42,
+    objectFit: 'contain',
+  },
+  coverTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#ffffff',
+    textAlign: 'center',
+    lineHeight: 1.35,
+    marginBottom: 6,
+    maxWidth: 480,
+  },
+  coverSubtitle: {
+    fontSize: 10,
+    color: '#ffffff',
+    textAlign: 'center',
+    lineHeight: 1.4,
+    opacity: 0.95,
+  },
+  coverBody: {
+    flex: 1,
+    paddingHorizontal: 40,
+    paddingTop: 36,
+    paddingBottom: 24,
+    alignItems: 'stretch',
+    justifyContent: 'flex-start',
+  },
+  coverLetterCard: {
+    width: '100%',
+    marginBottom: 0,
+    padding: 20,
+    paddingBottom: 18,
+  },
+  coverLetterGreeting: {
+    fontSize: 11,
+    color: '#1b3a57',
+    marginBottom: 14,
+    lineHeight: 1.5,
+  },
+  coverLetterSubject: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    color: '#009CD9',
+    marginBottom: 18,
+    lineHeight: 1.55,
+  },
+  coverLetterBody: {
+    fontSize: 9.5,
+    color: '#555554',
+    marginBottom: 11,
+    lineHeight: 1.7,
+    textAlign: 'justify',
+  },
+  coverLetterClosingBlock: {
+    marginTop: 10,
+  },
+  coverLetterClosing: {
+    fontSize: 10,
+    color: '#1b3a57',
+    marginBottom: 8,
+    lineHeight: 1.5,
+  },
+  coverLetterSignatory: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    color: '#009CD9',
+    marginBottom: 10,
+    lineHeight: 1.5,
+  },
+  coverLetterFooterLine: {
+    fontSize: 8.5,
+    color: '#757574',
+    marginBottom: 2,
+    lineHeight: 1.45,
+  },
+  coverLetterFooterBold: {
+    fontSize: 8.5,
+    fontWeight: 'bold',
+    color: '#757574',
+    marginTop: 4,
+    marginBottom: 2,
+    lineHeight: 1.45,
+  },
+  closingContentArea: {
+    padding: 40,
+    paddingTop: 100,
+    paddingBottom: 120,
+    flex: 1,
+  },
+  assistancePageCenter: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 40,
+    paddingTop: 90,
+    paddingBottom: 110,
+  },
+  assistanceCardCenter: {
+    width: '100%',
+    maxWidth: 460,
+  },
+  inquiryCardOuter: {
+    marginTop: 24,
+    width: '100%',
+  },
+  inquiryLead: {
+    fontSize: 10,
+    color: '#757574',
+    lineHeight: 1.6,
+    marginBottom: 16,
+    textAlign: 'left',
+    width: '100%',
+  },
+  inquiryBody: {
+    fontSize: 10,
+    color: '#757574',
+    lineHeight: 1.55,
+    marginBottom: 10,
+    textAlign: 'left',
+    width: '100%',
+  },
+  inquiryBodyLast: {
+    fontSize: 10,
+    color: '#757574',
+    lineHeight: 1.55,
+    marginBottom: 0,
+    textAlign: 'left',
+    width: '100%',
+  },
+  inquiryUrl: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    color: '#009CD9',
+    marginBottom: 10,
+    textAlign: 'left',
+    width: '100%',
   },
   letterheadHeader: {
     backgroundColor: '#009CD9',
@@ -129,12 +280,11 @@ const createStyles = () => StyleSheet.create({
     paddingBottom: 30,
     flex: 1,
   },
-  // Use a tighter top padding on subsequent pages to avoid occasional blank-page layout issues
-  // in @react-pdf/renderer when table blocks are close to the page height.
-  contentAreaTight: {
+  // Continuation pages: extra top padding so tables sit below the fixed logo
+  contentAreaContinuation: {
     padding: 40,
-    paddingTop: 60,
-    paddingBottom: 30,
+    paddingTop: 110,
+    paddingBottom: 90,
     flex: 1,
   },
   section: {
@@ -151,30 +301,41 @@ const createStyles = () => StyleSheet.create({
     borderBottomStyle: 'solid',
     textAlign: 'left',
   },
-  personalInfoCard: {
-    backgroundColor: '#f8f9fa',
-    padding: 20,
-    borderRadius: 8,
-    borderLeftWidth: 4,
-    borderLeftColor: '#009CD9',
-    borderLeftStyle: 'solid',
+  summaryCard: {
+    backgroundColor: '#f0f9ff',
+    padding: 25,
+    borderRadius: 12,
     marginBottom: 20,
+    borderWidth: 2,
+    borderColor: '#009CD9',
+    borderStyle: 'solid',
+    width: '100%',
+  },
+  summaryCardCenter: {
+    alignItems: 'center',
   },
   infoRow: {
     flexDirection: 'row',
     marginBottom: 10,
     alignItems: 'center',
+    width: '100%',
+  },
+  infoRowLast: {
+    flexDirection: 'row',
+    marginBottom: 0,
+    alignItems: 'center',
+    width: '100%',
   },
   infoLabel: {
     fontSize: 11,
     fontWeight: 'bold',
     color: '#757574',
-    width: '25%',
+    width: '32%',
     textAlign: 'left',
   },
   infoValue: {
     fontSize: 11,
-    color: '#2D9C2D',
+    color: '#009CD9',
     fontWeight: 'bold',
     flex: 1,
     textAlign: 'left',
@@ -307,12 +468,22 @@ const createStyles = () => StyleSheet.create({
     overflow: 'hidden',
   },
   questionsTableContainerPageBreak: {
-    marginTop: 15,
+    marginTop: 20,
     borderWidth: 2,
     borderColor: '#009CD9',
     borderStyle: 'solid',
     borderRadius: 12,
     overflow: 'hidden',
+  },
+  pageFooterDisclaimer: {
+    position: 'absolute',
+    bottom: 28,
+    left: 40,
+    right: 40,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0',
+    borderTopStyle: 'solid',
   },
   questionsTable: {
     marginTop: 0,
@@ -442,11 +613,9 @@ const createStyles = () => StyleSheet.create({
     color: '#757574',
     lineHeight: 1.5,
     textAlign: 'left',
-    marginTop: 3,
-    paddingTop: 3,
-    borderTopWidth: 1,
-    borderTopColor: '#e0e0e0',
-    borderTopStyle: 'solid',
+    marginTop: 0,
+    paddingTop: 0,
+    borderTopWidth: 0,
   },
   letterHeader: {
     flexDirection: 'row',
@@ -511,11 +680,12 @@ const createStyles = () => StyleSheet.create({
   },
   pageLogo: {
     width: 100,
-    height: 85,
+    height: 72,
+    objectFit: 'contain',
   },
   letterContent: {
     padding: 40,
-    paddingTop: 20,
+    paddingTop: 135,
     flex: 1,
   },
   letterGreeting: {
@@ -560,23 +730,24 @@ const createStyles = () => StyleSheet.create({
   signatureCompany: {
     fontSize: 11,
     color: '#757574',
-    marginBottom: 25,
+    marginBottom: 8,
     lineHeight: 1.6,
   },
   letterFooter: {
-    fontSize: 9,
+    fontSize: 10,
     color: '#757574',
-    marginTop: 15,
-    lineHeight: 1.5,
+    marginTop: 0,
+    marginBottom: 2,
+    lineHeight: 1.45,
     textAlign: 'left',
   },
   letterFooterBold: {
-    fontSize: 9,
+    fontSize: 10,
     color: '#757574',
     fontWeight: 'bold',
-    marginTop: 5,
-    marginBottom: 2,
-    lineHeight: 1.5,
+    marginTop: 2,
+    marginBottom: 1,
+    lineHeight: 1.45,
     textAlign: 'left',
   },
   disclaimerContainer: {
@@ -599,6 +770,24 @@ const createStyles = () => StyleSheet.create({
   },
 });
 
+const PDF_DISCLAIMER_TEXT =
+  "Disclaimer\n\nThis report is intended for informational purposes only and does not constitute legal advice. Regulatory interpretation may vary based on organizational structure, industry sector, and processing activities. Businesses should seek professional counsel for formal compliance assessments under UAE law.\n\nRSM UAE is a member of the RSM Network and trades as RSM. RSM is the trading name used by the members of the RSM network. Each member of the RSM Network is an independent assurance, tax and consulting firm, each of which practices in its own right. The RSM Network is not itself a separate legal entity of any description in any jurisdiction. The RSM Network is administered by RSM International Limited, a company registered in England and Wales, company number 4040598, whose registered office is at 50 Cannon Street, London EC4N 6JJ. The brand and trademark RSM and other intellectual property rights used by members of the Network are owned by RSM International Association, an association governed by article 60 et seq of the Civil Code of Switzerland, whose seat is in Zug.";
+
+const PDF_RSM_LOGO =
+  "https://cdn-nexlink.s3.us-east-2.amazonaws.com/rsm-international-vector-logo_2-removebg-preview_5f53785d-2f5c-421e-a976-6388f78a00f2.png";
+const RSM_UAE_EINVOICING_URL = "https://www.rsm.global/uae/service/e-invoicing";
+
+/** Embed remote images as data URIs so @react-pdf renders JPEG/PNG reliably (avoids blank white cover). */
+async function fetchPdfImageDataUri(url: string): Promise<string> {
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Failed to load PDF image (${response.status}): ${url}`);
+  }
+  const contentType = response.headers.get("content-type") || "image/png";
+  const buffer = Buffer.from(await response.arrayBuffer());
+  return `data:${contentType};base64,${buffer.toString("base64")}`;
+}
+
 // Helper function to generate PDF buffer
 async function generatePDFBuffer(
   personalInfo: PersonalInfo,
@@ -608,6 +797,13 @@ async function generatePDFBuffer(
   const currentQuestions = questionsData;
   const assessment = computeAssessment(answers);
 
+  let logoSrc = PDF_RSM_LOGO;
+  try {
+    logoSrc = await fetchPdfImageDataUri(PDF_RSM_LOGO);
+  } catch (imageError) {
+    console.warn("PDF logo: could not embed; using remote URL.", imageError);
+  }
+
   const createDocument = () => {
     const date = new Date();
     const day = String(date.getDate()).padStart(2, '0');
@@ -616,19 +812,15 @@ async function generatePDFBuffer(
     const currentDate = `${day}-${month}-${year}`;
     
     const allAnswers = Object.entries(answers);
-    // Keep the first page comfortably within A4 height to avoid an extra blank page.
-    const questionsPerThirdPage = 5; // First page: Summary + first set of Q&As
-    const questionsPerPage = 15; // For subsequent pages
+    // PDF page 3: first 10 Q&As; PDF page 4: all remaining Q&As
+    const questionsOnPage3 = 10;
     const questionChunksRaw: [string, string][][] = [];
-    
-    // First chunk: first set of questions (rendered on the first page)
+
     if (allAnswers.length > 0) {
-      questionChunksRaw.push(allAnswers.slice(0, questionsPerThirdPage));
+      questionChunksRaw.push(allAnswers.slice(0, questionsOnPage3));
     }
-    
-    // Remaining chunks: rest of the questions
-    for (let i = questionsPerThirdPage; i < allAnswers.length; i += questionsPerPage) {
-      questionChunksRaw.push(allAnswers.slice(i, i + questionsPerPage));
+    if (allAnswers.length > questionsOnPage3) {
+      questionChunksRaw.push(allAnswers.slice(questionsOnPage3));
     }
 
     // Defensive: never render a page for an empty chunk (can lead to a blank page in some renderers)
@@ -640,7 +832,11 @@ async function generatePDFBuffer(
         let displayAnswer = '';
 
         if (question) {
-          if (question.responseType === 'yesno' || question.responseType === 'select') {
+          if (question.responseType === 'select_other') {
+            displayAnswer = formatSelectOtherDisplay(answerValue, question.options);
+          } else if (question.responseType === 'select_countries') {
+            displayAnswer = formatSelectCountriesDisplay(answerValue, question.options);
+          } else if (question.responseType === 'yesno' || question.responseType === 'select') {
             const answer = question.options?.find((opt) => opt.value === answerValue);
             displayAnswer = answer?.label || answerValue || 'Not answered';
           } else if (question.responseType === 'multiselect') {
@@ -660,6 +856,14 @@ async function generatePDFBuffer(
             } catch {
               displayAnswer = answerValue || 'Not answered';
             }
+          } else if (question.responseType === 'yesno_details') {
+            displayAnswer = formatYesNoDetailsDisplay(
+              answerValue,
+              question.detailsKind ?? 'countries',
+              question.options,
+            );
+          } else if (question.responseType === 'entities') {
+            displayAnswer = formatEntitiesDisplay(answerValue);
           } else {
             // text, number, etc
             displayAnswer = answerValue || 'Not answered';
@@ -687,6 +891,121 @@ async function generatePDFBuffer(
     };
 
     const pages = [];
+
+    const createCoverLetterContent = () =>
+      React.createElement(View, { style: [styles.summaryCard, styles.coverLetterCard] },
+        React.createElement(Text, { style: styles.coverLetterGreeting },
+          `Dear ${personalInfo.name || "Participant"},`
+        ),
+        React.createElement(Text, { style: styles.coverLetterSubject },
+          `Subject: Abridged UAE E-Invoicing Self-Assessment Report – ${personalInfo.company || "Your Organization"}`
+        ),
+        React.createElement(Text, { style: styles.coverLetterBody },
+          "We would like to thank you for your participation in completing the UAE E-Invoicing self-assessment questionnaire."
+        ),
+        React.createElement(Text, { style: styles.coverLetterBody },
+          "This report is auto-generated by the assessment platform, based solely on the responses provided by you. The results are shared as is, without validation, verification, independent testing, or review by our team."
+        ),
+        React.createElement(Text, { style: styles.coverLetterBody },
+          "We believe that this report will assist you in gaining high-level insights into your organization's UAE E-Invoicing compliance preparedness and identifying areas for improvement as you continue your journey towards adopting the UAE E-Invoicing framework."
+        ),
+        React.createElement(Text, { style: styles.coverLetterBody },
+          "This report is intended solely for the use of management, and sharing should be limited only to authorized personnel within your organization."
+        ),
+        React.createElement(Text, { style: styles.coverLetterBody },
+          "Please do not hesitate to contact us if you have any questions or would like to schedule a session on the outcome of this report with our team."
+        ),
+        React.createElement(View, { style: styles.coverLetterClosingBlock },
+          React.createElement(Text, { style: styles.coverLetterClosing }, "Thanking you,"),
+          React.createElement(Text, { style: styles.coverLetterSignatory }, "RSM UAE"),
+          React.createElement(Text, { style: styles.coverLetterFooterBold }, "THE POWER OF BEING UNDERSTOOD"),
+          React.createElement(Text, { style: styles.coverLetterFooterBold }, "AUDIT | TAX | CONSULTING")
+        )
+      );
+
+    const createCoverPage = () =>
+      React.createElement(Page, { size: "A4", style: styles.coverPage },
+        React.createElement(View, { style: styles.coverHeaderBand },
+          React.createElement(View, { style: styles.coverLogoWrap },
+            React.createElement(Image, { style: styles.coverLogo, src: logoSrc })
+          ),
+          React.createElement(Text, { style: styles.coverTitle },
+            "RSM E-invoicing Self Assessment Report"
+          ),
+          React.createElement(Text, { style: styles.coverSubtitle },
+            "UAE Mandate Readiness | Indicative Self-Assessment"
+          )
+        ),
+        React.createElement(View, { style: styles.coverBody },
+          createCoverLetterContent()
+        )
+      );
+
+    const personalInfoRows: Array<[string, string]> = [
+      ["Assessment Date", currentDate],
+      ["Full Name", personalInfo.name],
+      ["Email Address", personalInfo.email],
+      ["Company", personalInfo.company],
+      ["Position", personalInfo.position],
+      ...(personalInfo.phone ? [["Phone", personalInfo.phone] as [string, string]] : []),
+      ...(personalInfo.website ? [["Website", personalInfo.website] as [string, string]] : []),
+    ];
+
+    const createInfoRow = (label: string, value: string, isLast: boolean) =>
+      React.createElement(View, { style: isLast ? styles.infoRowLast : styles.infoRow },
+        React.createElement(Text, { style: styles.infoLabel }, `${label}:`),
+        React.createElement(Text, { style: styles.infoValue }, value || "—")
+      );
+
+    const createOverviewPage = () =>
+      React.createElement(Page, { size: "A4", style: styles.page },
+        React.createElement(View, { style: styles.pageLogoHeader },
+          React.createElement(Image, { style: styles.pageLogo, src: logoSrc })
+        ),
+        React.createElement(View, { style: styles.contentArea },
+          React.createElement(View, { style: styles.section },
+            React.createElement(Text, { style: styles.sectionTitle }, "Personal Information"),
+            React.createElement(View, { style: styles.summaryCard },
+              ...personalInfoRows.map(([label, value], index) =>
+                createInfoRow(label, value, index === personalInfoRows.length - 1)
+              )
+            )
+          ),
+          React.createElement(View, { style: styles.section },
+            React.createElement(Text, { style: styles.sectionTitle }, "Assessment Summary"),
+            React.createElement(View, { style: [styles.summaryCard, styles.summaryCardCenter] },
+              React.createElement(Text, { style: styles.scoreLabel }, "Total Score"),
+              React.createElement(Text, { style: styles.scoreValue }, `${assessment.totalScore.toString()}`),
+              React.createElement(Text, { style: styles.resultText }, `Axis A (Urgency): ${assessment.urgency.score} / ${assessment.maxUrgencyScore} · ${assessment.urgency.category}`),
+              React.createElement(Text, { style: styles.resultText }, `Axis B (Complexity): ${assessment.complexity.score} / ${assessment.maxComplexityScore} · ${assessment.complexity.category}`)
+            )
+          )
+        )
+      );
+
+    const createFurtherAssistancePage = () =>
+      React.createElement(Page, { size: "A4", style: styles.page },
+        React.createElement(View, { style: styles.pageLogoHeader },
+          React.createElement(Image, { style: styles.pageLogo, src: logoSrc })
+        ),
+        React.createElement(View, { style: styles.assistancePageCenter },
+          React.createElement(View, { style: [styles.summaryCard, styles.assistanceCardCenter] },
+            React.createElement(View, { style: styles.summaryCardCenter },
+              React.createElement(Text, { style: styles.scoreLabel }, "Further Assistance")
+            ),
+            React.createElement(Text, { style: styles.inquiryBody },
+              "For any queries regarding e-invoicing compliance, implementation support, or the interpretation of this assessment report, please visit the RSM in UAE e-invoicing service page:"
+            ),
+            React.createElement(Text, { style: styles.inquiryUrl }, RSM_UAE_EINVOICING_URL),
+            React.createElement(Text, { style: styles.inquiryBodyLast },
+              "Our specialists can support you with mandate readiness, technical integration, and ongoing compliance under the UAE e-invoicing framework."
+            )
+          )
+        ),
+        React.createElement(View, { style: styles.pageFooterDisclaimer },
+          React.createElement(Text, { style: styles.disclaimerTextBottom }, PDF_DISCLAIMER_TEXT)
+        )
+      );
     
     // Second page: Letter format - COMMENTED OUT FOR NOW (will be added back later)
     /*
@@ -772,28 +1091,18 @@ async function generatePDFBuffer(
     );
     */
 
-    // First page: Assessment Summary and Assessment Details (Second page when letter section is enabled)
     const firstChunk = questionChunks[0] || [];
     const remainingChunks = questionChunks.slice(1);
-    
+
+    pages.push(createCoverPage());
+    pages.push(createOverviewPage());
+
     pages.push(
       React.createElement(Page, { size: "A4", style: styles.page },
         React.createElement(View, { style: styles.pageLogoHeader },
-          React.createElement(Image, {
-            style: styles.pageLogo,
-            src: "https://22527425.fs1.hubspotusercontent-na2.net/hubfs/22527425/RSM-Kuwait/RSM%20Logo%20-%20Color.png"
-          })
+          React.createElement(Image, { style: styles.pageLogo, src: logoSrc })
         ),
         React.createElement(View, { style: styles.contentArea },
-          React.createElement(View, { style: styles.section },
-            React.createElement(Text, { style: styles.sectionTitle }, "Assessment Summary"),
-            React.createElement(View, { style: styles.scoreContainer },
-              React.createElement(Text, { style: styles.scoreLabel }, "Total Score"),
-              React.createElement(Text, { style: styles.scoreValue }, `${assessment.totalScore.toString()}`),
-              React.createElement(Text, { style: styles.resultText }, `Axis A (Urgency): ${assessment.urgency.score} / ${assessment.maxUrgencyScore} · ${assessment.urgency.category}`),
-              React.createElement(Text, { style: styles.resultText }, `Axis B (Complexity): ${assessment.complexity.score} / ${assessment.maxComplexityScore} · ${assessment.complexity.category}`),
-            )
-          ),
           React.createElement(View, { style: styles.section },
             React.createElement(Text, { style: styles.sectionTitle }, "Assessment Details"),
             React.createElement(View, { style: styles.questionsTableContainer },
@@ -809,29 +1118,20 @@ async function generatePDFBuffer(
                 ...createQuestionRows(firstChunk, remainingChunks.length === 0)
               )
             )
-          ),
-          remainingChunks.length === 0 ? React.createElement(View, { style: styles.section },
-            React.createElement(Text, { style: styles.disclaimerTextBottom },
-              "Disclaimer: This is not a comprehensive E-invoicing assessment. This assessment only consists of about 15 questions to quickly assess a few key requirements of the E-invoicing framework. This assessment does not guarantee the detection of all existing or potential vulnerabilities and compliance gaps. It reflects the organization's compliance posture at the time of testing solely based on your responses to the assessment questions. The assessment report is intended solely for your internal use and must not be distributed, disclosed, or relied upon by third parties. RSM shall not be liable for any losses, damages, claims, or expenses arising from, or in connection with, the use of the assessment results."
-            )
-          ) : null
+          )
         )
       )
     );
 
-    // Add remaining question pages starting from second page (first page is summary+details; when letter section is enabled, it becomes third page)
     remainingChunks.forEach((chunk, chunkIndex) => {
       const isLastChunk = chunkIndex === remainingChunks.length - 1;
 
       pages.push(
         React.createElement(Page, { size: "A4", style: styles.page },
           React.createElement(View, { style: styles.pageLogoHeader },
-            React.createElement(Image, {
-              style: styles.pageLogo,
-              src: "https://22527425.fs1.hubspotusercontent-na2.net/hubfs/22527425/RSM-Kuwait/RSM%20Logo%20-%20Color.png"
-            })
+            React.createElement(Image, { style: styles.pageLogo, src: logoSrc })
           ),
-          React.createElement(View, { style: styles.contentAreaTight },
+          React.createElement(View, { style: styles.contentAreaContinuation },
             React.createElement(View, { style: styles.section },
               React.createElement(View, { 
                 style: styles.questionsTableContainerPageBreak 
@@ -840,16 +1140,13 @@ async function generatePDFBuffer(
                   ...createQuestionRows(chunk, isLastChunk)
                 )
               )
-            ),
-            isLastChunk ? React.createElement(View, { style: styles.section },
-              React.createElement(Text, { style: styles.disclaimerTextBottom },
-                "Disclaimer: This is not a comprehensive E-invoicing assessment. This assessment only consists of about 15 questions to quickly assess a few key requirements of the E-invoicing framework. This assessment does not guarantee the detection of all existing or potential vulnerabilities and compliance gaps. It reflects the organization's compliance posture at the time of testing solely based on your responses to the assessment questions. The assessment report is intended solely for your internal use and must not be distributed, disclosed, or relied upon by third parties. RSM shall not be liable for any losses, damages, claims, or expenses arising from, or in connection with, the use of the assessment results."
-              )
-            ) : null
+            )
           )
         )
       );
     });
+
+    pages.push(createFurtherAssistancePage());
 
     return React.createElement(Document, {}, ...pages);
   };
@@ -882,17 +1179,35 @@ async function uploadPDFToS3(
 ): Promise<string | null> {
   try {
     // Check if S3 credentials are available
-    if (!process.env.AWS_ACCESS_KEY_ID || !process.env.AWS_SECRET_ACCESS_KEY || !process.env.AWS_S3_BUCKET_NAME || !process.env.AWS_REGION) {
-      console.error('AWS S3 credentials or bucket name not configured');
+    const hasAccessKey = !!process.env.AWS_ACCESS_KEY_ID;
+    const hasSecretKey = !!process.env.AWS_SECRET_ACCESS_KEY;
+    const hasBucket = !!process.env.AWS_S3_BUCKET_NAME;
+    const hasRegion = !!process.env.AWS_REGION;
+
+    if (!hasAccessKey || !hasSecretKey || !hasBucket || !hasRegion) {
+      console.error('AWS S3 credentials or bucket name not configured:', {
+        AWS_ACCESS_KEY_ID: hasAccessKey ? '✓ Set' : '✗ Missing',
+        AWS_SECRET_ACCESS_KEY: hasSecretKey ? '✓ Set' : '✗ Missing',
+        AWS_S3_BUCKET_NAME: hasBucket ? `✓ Set (${process.env.AWS_S3_BUCKET_NAME})` : '✗ Missing',
+        AWS_REGION: hasRegion ? `✓ Set (${process.env.AWS_REGION})` : '✗ Missing',
+      });
       return null;
     }
 
+    console.log('AWS S3: All credentials present, proceeding with upload...');
+
+    // Extract credentials (TypeScript knows they're defined after the check above)
+    const region = process.env.AWS_REGION!;
+    const accessKeyId = process.env.AWS_ACCESS_KEY_ID!;
+    const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY!;
+    const bucketName = process.env.AWS_S3_BUCKET_NAME!;
+
     // Initialize S3 client
     const s3Client = new S3Client({
-      region: process.env.AWS_REGION,
+      region: region,
       credentials: {
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+        accessKeyId: accessKeyId,
+        secretAccessKey: secretAccessKey,
       },
     });
 
@@ -903,28 +1218,128 @@ async function uploadPDFToS3(
 
     // Upload to S3
     const command = new PutObjectCommand({
-      Bucket: process.env.AWS_S3_BUCKET_NAME,
+      Bucket: bucketName,
       Key: filename,
       Body: pdfBuffer,
       ContentType: 'application/pdf',
       ACL: 'private', // or 'public-read' if you want public access
     });
 
+    console.log('AWS S3: Uploading file...', {
+      bucket: bucketName,
+      region: region,
+      key: filename,
+      fileSize: pdfBuffer.length,
+    });
+
     await s3Client.send(command);
 
     // Generate the S3 URL
-    const s3Url = `https://${process.env.AWS_S3_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${filename}`;
+    const s3Url = `https://${bucketName}.s3.${region}.amazonaws.com/${filename}`;
     
-    console.log('Successfully uploaded PDF to S3:', s3Url);
-    console.log('S3 Upload - Bucket:', process.env.AWS_S3_BUCKET_NAME, 'Region:', process.env.AWS_REGION, 'Key:', filename);
+    console.log('AWS S3: Successfully uploaded PDF to S3:', s3Url);
+    console.log('AWS S3: Upload details - Bucket:', bucketName, 'Region:', region, 'Key:', filename);
     return s3Url;
   } catch (error: any) {
-    console.error('Error uploading PDF to S3:', error);
+    console.error('AWS S3: Error uploading PDF to S3:', error);
+    console.error('AWS S3: Error details:', {
+      message: error?.message,
+      code: error?.code,
+      name: error?.name,
+      stack: process.env.NODE_ENV === 'development' ? error?.stack : undefined,
+    });
+    
+    // Common S3 errors
+    if (error?.code === 'InvalidAccessKeyId') {
+      console.error('AWS S3: Invalid Access Key ID - check AWS_ACCESS_KEY_ID');
+    } else if (error?.code === 'SignatureDoesNotMatch') {
+      console.error('AWS S3: Invalid Secret Access Key - check AWS_SECRET_ACCESS_KEY');
+    } else if (error?.code === 'NoSuchBucket') {
+      console.error('AWS S3: Bucket does not exist - check AWS_S3_BUCKET_NAME');
+    } else if (error?.code === 'AccessDenied') {
+      console.error('AWS S3: Access denied - check IAM permissions for the AWS credentials');
+    }
+    
     return null;
   }
 }
 
 // Function to write assessment data to Google Sheets
+function normalizeSheetHeader(value: string): string {
+  return (value || "")
+    .toLowerCase()
+    .trim()
+    .replace(/[\u200B-\u200D\uFEFF]/g, "") // strip zero-width chars
+    .replace(/[^a-z0-9]/g, "");
+}
+
+function safeCellString(value: unknown): string {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
+function formatAnswerForSheet(
+  question: (typeof questionsData)[number],
+  answerValue: string,
+): string {
+  if (!answerValue) return "";
+
+  if (question.responseType === "select_other") {
+    return formatSelectOtherDisplay(answerValue, question.options);
+  }
+
+  if (question.responseType === "select_countries") {
+    return formatSelectCountriesDisplay(answerValue, question.options);
+  }
+
+  if (question.responseType === "yesno" || question.responseType === "select") {
+    const answer = question.options?.find((opt) => opt.value === answerValue);
+    return answer ? answer.label : answerValue;
+  }
+
+  if (question.responseType === "multiselect") {
+    const selectedValues = answerValue.split(",").map((v) => v.trim()).filter(Boolean);
+    return selectedValues
+      .map((val) => question.options?.find((opt) => opt.value === val)?.label || val)
+      .join(", ");
+  }
+
+  if (question.responseType === "ynlist") {
+    try {
+      const ynAnswers = JSON.parse(answerValue);
+      return Object.entries(ynAnswers as Record<string, unknown>)
+        .map(([key, val]) => {
+          const option = question.options?.find((opt) => opt.value === key);
+          return `${option?.label || key}: ${safeCellString(val)}`;
+        })
+        .join("; ");
+    } catch {
+      return answerValue;
+    }
+  }
+
+  if (question.responseType === "yesno_details") {
+    return formatYesNoDetailsDisplay(
+      answerValue,
+      question.detailsKind ?? 'countries',
+      question.options,
+    );
+  }
+
+  if (question.responseType === "entities") {
+    return formatEntitiesDisplay(answerValue);
+  }
+
+  // text, number, etc.
+  return answerValue;
+}
+
 async function writeToGoogleSheets(
   personalInfo: PersonalInfo,
   answers: Record<string, string>,
@@ -938,170 +1353,243 @@ async function writeToGoogleSheets(
       return;
     }
 
-    const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID || process.env.GOOGLE_SHEET_ID;
-    if (!spreadsheetId) {
-      console.error('GOOGLE_SHEETS_SPREADSHEET_ID (or GOOGLE_SHEET_ID) environment variable is not set');
+    // Parse credentials with better error handling
+    let credentials;
+    try {
+      credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_CREDENTIALS);
+      console.log('Google Sheets: Credentials parsed successfully. Service account:', credentials.client_email);
+    } catch (parseError: any) {
+      console.error('Failed to parse GOOGLE_SERVICE_ACCOUNT_CREDENTIALS:', parseError.message);
+      console.error('First 100 chars of credentials:', process.env.GOOGLE_SERVICE_ACCOUNT_CREDENTIALS?.substring(0, 100));
       return;
     }
 
     // Initialize Google Sheets API
     const auth = new google.auth.GoogleAuth({
-      credentials: JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_CREDENTIALS),
+      credentials: credentials,
       scopes: ['https://www.googleapis.com/auth/spreadsheets'],
     });
 
     const sheets = google.sheets({ version: 'v4', auth });
-    const sheetName = 'Sheet1'; // Change if your sheet has a different name
+    const spreadsheetId =
+      process.env.GOOGLE_SHEETS_SPREADSHEET_ID ||
+      process.env.GOOGLE_SHEET_ID ||
+      // Default to the sheet you provided in chat
+      '17IoNsq0xAWSzJVgwnPC_Ej_eUGucW9iw6iVbvanUunE';
+
+    const sheetName =
+      process.env.GOOGLE_SHEETS_ASSESSMENT_SHEET_NAME ||
+      process.env.GOOGLE_SHEETS_SHEET_NAME ||
+      'Sheet1';
+
+    console.log('Google Sheets: Using spreadsheet:', spreadsheetId, 'Sheet:', sheetName);
 
     // Get current questions
     const currentQuestions = questionsData;
 
-    // Prepare headers
     const assessment = computeAssessment(answers);
-    const headers = [
-      'Timestamp',
-      'Name',
-      'Email',
-      'Company',
-      'Position',
-      'Total Score',
-      'Axis A (Urgency) Score',
-      'Axis A Category',
-      'Axis B (Complexity) Score',
-      'Axis B Category',
-      'Eligible',
-      'PDF S3 Link',
-      ...currentQuestions.map(q => `Q${q.id.replace('q', '')} - ${q.text.substring(0, 50)}...`),
-    ];
-
-    const lastColumnLetter = columnToLetter(headers.length);
-    const headerRange = `${sheetName}!A1:${lastColumnLetter}1`;
-
-    // Check if headers exist, if not, add them
-    try {
-      const headerResponse = await sheets.spreadsheets.values.get({
-        spreadsheetId,
-        range: headerRange,
-      });
-
-      // If no headers exist, add them
-      if (!headerResponse.data.values || headerResponse.data.values.length === 0) {
-        console.log('No headers found, adding new headers');
-        await sheets.spreadsheets.values.update({
-          spreadsheetId,
-          range: headerRange,
-          valueInputOption: 'USER_ENTERED',
-          requestBody: {
-            values: [headers],
-          },
-        });
-      } else {
-        // Update headers if they don't match (in case questions changed or new columns added)
-        const existingHeaders = headerResponse.data.values[0];
-        const headersMatch = existingHeaders.length === headers.length && 
-                             JSON.stringify(existingHeaders) === JSON.stringify(headers);
-        
-        if (!headersMatch) {
-          console.log('Headers mismatch detected. Existing:', existingHeaders.length, 'New:', headers.length);
-          console.log('Updating headers to include PDF S3 Link column');
-          await sheets.spreadsheets.values.update({
-            spreadsheetId,
-            range: headerRange,
-            valueInputOption: 'USER_ENTERED',
-            requestBody: {
-              values: [headers],
-            },
-          });
-        } else {
-          console.log('Headers match, no update needed');
-        }
-      }
-    } catch (error) {
-      // If sheet doesn't exist or error, try to create headers
-      console.error('Error checking/updating headers:', error);
-      await sheets.spreadsheets.values.update({
-        spreadsheetId,
-        range: headerRange,
-        valueInputOption: 'USER_ENTERED',
-        requestBody: {
-          values: [headers],
-        },
-      });
-    }
-
-    // Prepare row data
+    // Build a canonical data map (values are strings for cells)
     const timestamp = new Date().toISOString();
-    const rowData = [
-      timestamp,
-      personalInfo.name,
-      personalInfo.email,
-      personalInfo.company,
-      personalInfo.position,
-      assessment.totalScore.toString(),
-      assessment.urgency.score.toString(),
-      assessment.urgency.category,
-      assessment.complexity.score.toString(),
-      assessment.complexity.category,
-      assessment.eligible ? 'Yes' : 'No',
-      pdfS3Url || '',
-      ...currentQuestions.map(q => {
-        const answerValue = answers[q.id] || '';
-        let displayValue = '';
-        
-        if (q.responseType === 'yesno' || q.responseType === 'select') {
-          const answer = q.options?.find(opt => opt.value === answerValue);
-          displayValue = answer ? answer.label : answerValue || '';
-        } else if (q.responseType === 'ynlist') {
-          try {
-            const ynAnswers = JSON.parse(answerValue);
-            displayValue = Object.entries(ynAnswers)
-              .map(([key, val]) => {
-                const option = q.options?.find(opt => opt.value === key);
-                return `${option?.label || key}: ${val}`;
-              })
-              .join('; ');
-          } catch {
-            displayValue = answerValue || '';
-          }
-        } else if (q.responseType === 'multiselect') {
-          const selectedValues = answerValue.split(',').filter(v => v);
-          displayValue = selectedValues
-            .map(val => {
-              const option = q.options?.find(opt => opt.value === val);
-              return option ? option.label : val;
-            })
-            .join(', ');
-        } else {
-          // text, number, or other types - use value directly
-          displayValue = answerValue || '';
-        }
-        
-        return displayValue;
+    const baseFields: Record<string, string> = {
+      Timestamp: timestamp,
+      Name: personalInfo.name,
+      Email: personalInfo.email,
+      Company: personalInfo.company,
+      Position: personalInfo.position,
+      Phone: personalInfo.phone || "",
+      Website: personalInfo.website || "",
+      "Total Score": assessment.totalScore.toString(),
+      "Axis A (Urgency) Score": assessment.urgency.score.toString(),
+      "Axis A Category": assessment.urgency.category,
+      "Axis B (Complexity) Score": assessment.complexity.score.toString(),
+      "Axis B Category": assessment.complexity.category,
+      Eligible: assessment.eligible ? "Yes" : "No",
+      // Don't set PDF S3 Link here - we'll add it separately to ensure it takes precedence
+    };
+
+    // Desired headers (we will create headers if missing, and append any missing columns)
+    const desiredHeaders: string[] = [
+      ...Object.keys(baseFields),
+      ...currentQuestions.map((q) => {
+        const qNum = q.id.replace(/^q/i, "");
+        const cleanText = (q.text || "").replace(/\s+/g, " ").trim();
+        const label = `Q${qNum} - ${cleanText}`;
+        return label.length > 140 ? `${label.slice(0, 137)}...` : label;
       }),
     ];
 
-    console.log('Writing to Google Sheets - PDF S3 URL:', pdfS3Url || 'Not available');
-    console.log('Row data length:', rowData.length, 'Headers length:', headers.length);
+    // Alias map: normalized header -> value
+    const normalizedValueByHeader = new Map<string, string>();
+    const addAlias = (header: string, value: string, forceOverwrite = false) => {
+      const n = normalizeSheetHeader(header);
+      if (!n) return;
+      // If forceOverwrite is true, always set the value
+      // Otherwise, prefer the first non-empty value encountered
+      if (forceOverwrite || !normalizedValueByHeader.has(n) || !normalizedValueByHeader.get(n)) {
+        normalizedValueByHeader.set(n, value);
+      }
+    };
 
-    // Append the new row
+    Object.entries(baseFields).forEach(([k, v]) => addAlias(k, v));
+
+    // Add PDF S3 Link separately - ensure it takes precedence and add multiple aliases
+    // This must be done AFTER baseFields to ensure the actual URL overwrites any empty value
+    // Use forceOverwrite=true to ensure the S3 URL always takes precedence
+    const pdfLinkValue = pdfS3Url || "";
+    addAlias("PDF S3 Link", pdfLinkValue, true);
+    addAlias("PDF S3 URL", pdfLinkValue, true);
+    addAlias("PDF Link", pdfLinkValue, true);
+    addAlias("S3 Link", pdfLinkValue, true);
+    addAlias("S3 URL", pdfLinkValue, true);
+    addAlias("PDF URL", pdfLinkValue, true);
+    
+    if (pdfS3Url) {
+      console.log('Google Sheets: PDF S3 URL to write:', pdfS3Url);
+      console.log('Google Sheets: PDF S3 Link aliases added to mapping');
+    } else {
+      console.log('Google Sheets: PDF S3 URL is empty/null - AWS S3 may not be configured or upload failed');
+    }
+    
+    // Also add it to baseFields for the desired headers list
+    baseFields["PDF S3 Link"] = pdfLinkValue;
+
+    currentQuestions.forEach((q) => {
+      const answerValue = answers[q.id] || "";
+      const displayValue = formatAnswerForSheet(q, answerValue);
+      const qNum = q.id.replace(/^q/i, "");
+      addAlias(q.id, displayValue); // q5
+      addAlias(`Q${qNum}`, displayValue); // Q5
+      addAlias(`Question ${qNum}`, displayValue);
+      addAlias(q.text || "", displayValue);
+      addAlias(`Q${qNum} - ${q.text || ""}`, displayValue);
+
+      // Helpful extra synonyms for the VAT eligibility question (if present)
+      if (q.id.toLowerCase() === "q5") {
+        addAlias("VAT Registered", displayValue);
+        addAlias("VAT registration", displayValue);
+      }
+    });
+
+    // Read existing headers (analyze), extend if needed, then map values by header
+    console.log('Google Sheets: Reading existing headers from', `${sheetName}!1:1`);
+    const existingHeaderResp = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: `${sheetName}!1:1`,
+    });
+    console.log('Google Sheets: Existing headers found:', existingHeaderResp.data.values?.[0]?.length || 0);
+
+    const existingHeaders: string[] =
+      existingHeaderResp.data.values && existingHeaderResp.data.values[0]
+        ? existingHeaderResp.data.values[0].map((h) => safeCellString(h))
+        : [];
+
+    const existingHeaderSet = new Set(existingHeaders.map(normalizeSheetHeader).filter(Boolean));
+
+    let finalHeaders: string[] = existingHeaders.length > 0 ? [...existingHeaders] : [];
+
+    // If no headers yet, create from desired headers
+    if (finalHeaders.length === 0) {
+      finalHeaders = [...desiredHeaders];
+    } else {
+      // Append any missing desired headers so we can capture ALL details
+      for (const h of desiredHeaders) {
+        const nh = normalizeSheetHeader(h);
+        if (nh && !existingHeaderSet.has(nh)) {
+          finalHeaders.push(h);
+          existingHeaderSet.add(nh);
+        }
+      }
+    }
+
+    const lastColumnLetter = columnToLetter(finalHeaders.length);
+    const headerRange = `${sheetName}!A1:${lastColumnLetter}1`;
+
+    // Ensure header row matches finalHeaders (without overwriting user-defined columns order)
+    await sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: headerRange,
+      valueInputOption: "USER_ENTERED",
+      requestBody: { values: [finalHeaders] },
+    });
+
+    // Build row in the exact header order
+    const rowData = finalHeaders.map((h, index) => {
+      const normalized = normalizeSheetHeader(h);
+      const direct = normalizedValueByHeader.get(normalized);
+      if (direct !== undefined) {
+        // Log PDF S3 Link mapping for debugging
+        if (normalized.includes('pdf') && (normalized.includes('link') || normalized.includes('url'))) {
+          console.log(`Google Sheets: Mapped "${h}" (normalized: "${normalized}") at column ${index + 1} to value:`, direct || '(empty)', 'Length:', direct?.length || 0);
+        }
+        return direct;
+      }
+
+      // Heuristic: if header contains something like "q5", map to that question
+      const qMatch = (h || "").match(/q\s*0*(\d+)/i);
+      if (qMatch?.[1]) {
+        const qKey = normalizeSheetHeader(`q${qMatch[1]}`);
+        const fromQ = normalizedValueByHeader.get(qKey);
+        if (fromQ !== undefined) return fromQ;
+      }
+
+      return "";
+    });
+
+    // Find PDF S3 Link column index for logging
+    const pdfLinkHeaderIndex = finalHeaders.findIndex(h => {
+      const n = normalizeSheetHeader(h);
+      return n.includes('pdf') && (n.includes('link') || n.includes('url'));
+    });
+    const pdfLinkValueInRow = pdfLinkHeaderIndex >= 0 ? rowData[pdfLinkHeaderIndex] : 'N/A';
+    
+    // Debug: Check what's in the normalizedValueByHeader map for PDF S3 Link
+    const pdfLinkNormalized = normalizeSheetHeader("PDF S3 Link");
+    const pdfLinkInMap = normalizedValueByHeader.get(pdfLinkNormalized);
+
+    console.log("Google Sheets: Writing row with", {
+      spreadsheetId,
+      sheetName,
+      headerCount: finalHeaders.length,
+      rowCellCount: rowData.length,
+      firstFewHeaders: finalHeaders.slice(0, 5),
+      firstFewValues: rowData.slice(0, 5),
+      pdfS3LinkColumnIndex: pdfLinkHeaderIndex,
+      pdfS3LinkHeader: pdfLinkHeaderIndex >= 0 ? finalHeaders[pdfLinkHeaderIndex] : 'Not found',
+      pdfS3LinkValueInRow: pdfLinkValueInRow,
+      pdfS3LinkValueInMap: pdfLinkInMap,
+      pdfS3UrlProvided: pdfS3Url || '(null/empty)',
+      normalizedKey: pdfLinkNormalized,
+      mapHasKey: normalizedValueByHeader.has(pdfLinkNormalized),
+    });
+
     await sheets.spreadsheets.values.append({
       spreadsheetId,
       range: `${sheetName}!A:${lastColumnLetter}`,
-      valueInputOption: 'USER_ENTERED',
-      insertDataOption: 'INSERT_ROWS',
-      requestBody: {
-        values: [rowData],
-      },
+      valueInputOption: "USER_ENTERED",
+      insertDataOption: "INSERT_ROWS",
+      requestBody: { values: [rowData] },
     });
 
-    console.log('Successfully wrote assessment data to Google Sheets');
+    console.log('Google Sheets: Successfully wrote assessment data to Google Sheets');
   } catch (error: any) {
-    console.error('Error writing to Google Sheets:', error);
-    console.error('Error details:', {
+    console.error('Google Sheets: Error writing to Google Sheets:', error);
+    console.error('Google Sheets: Error details:', {
       message: error?.message,
       code: error?.code,
+      status: error?.response?.status,
+      statusText: error?.response?.statusText,
       response: error?.response?.data,
+      stack: process.env.NODE_ENV === 'development' ? error?.stack : undefined,
     });
+    
+    // Common error: Sheet not shared with service account
+    if (error?.code === 403 || error?.response?.status === 403) {
+      console.error('Google Sheets: PERMISSION DENIED - Make sure the spreadsheet is shared with:', 
+        process.env.GOOGLE_SERVICE_ACCOUNT_CREDENTIALS ? 
+          JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_CREDENTIALS).client_email : 
+          'the service account email');
+    }
+    
     // Don't throw error - we don't want to fail the email sending if sheets write fails
   }
 }
@@ -1110,7 +1598,7 @@ async function createAssessmentSubmission(
   personalInfo: PersonalInfo,
   answers: Record<string, string>,
 ) {
-  const assessment = computeAssessment(answers);
+  const assessmentResult = computeAssessment(answers);
 
   return db.assessmentSubmission.create({
     data: {
@@ -1120,12 +1608,12 @@ async function createAssessmentSubmission(
       position: personalInfo.position,
       phone: personalInfo.phone || null,
       website: personalInfo.website || null,
-      totalScore: assessment.totalScore,
-      urgencyScore: assessment.urgency.score,
-      urgencyCategory: assessment.urgency.category,
-      complexityScore: assessment.complexity.score,
-      complexityCategory: assessment.complexity.category,
-      eligible: assessment.eligible,
+      totalScore: assessmentResult.totalScore,
+      urgencyScore: assessmentResult.urgency.score,
+      urgencyCategory: assessmentResult.urgency.category,
+      complexityScore: assessmentResult.complexity.score,
+      complexityCategory: assessmentResult.complexity.category,
+      eligible: assessmentResult.eligible,
       answers,
     },
   });
@@ -1137,25 +1625,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   const { personalInfo, answers } = req.body as AssessmentData
-  if (
-    !personalInfo?.name ||
-    !personalInfo?.email ||
-    !personalInfo?.company ||
-    !personalInfo?.position ||
-    !answers ||
-    typeof answers !== 'object'
-  ) {
-    return res.status(400).json({ message: 'Missing required assessment fields.' });
-  }
-
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (!emailRegex.test(personalInfo.email)) {
-    console.error('Invalid email address:', personalInfo.email);
-    return res.status(400).json({ message: 'Invalid email address provided.' });
-  }
-
   const assessment = computeAssessment(answers);
   const currentQuestions = questionsData;
+
+  // Create a transporter using SMTP
+  const transporter = nodemailer.createTransport({
+    host: process.env.SMTP_HOST,
+    port: parseInt(process.env.SMTP_PORT || '587'),
+    secure: process.env.SMTP_SECURE === 'true',
+    auth: {
+      user: process.env.SMTP_USER,
+      pass: process.env.SMTP_PASS,
+    },
+  })
 
   // Prepare email content with HTML formatting
   const emailContent = `
@@ -1203,6 +1685,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 <td><strong>Position:</strong></td>
                 <td>${personalInfo.position}</td>
               </tr>
+              <tr>
+                <td><strong>Website:</strong></td>
+                <td>${personalInfo.website || '—'}</td>
+              </tr>
             </table>
           </div>
           <div class="section">
@@ -1221,7 +1707,53 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               </tr>
               ${Object.entries(answers).map(([questionId, answerValue]) => {
                 const question = currentQuestions.find(q => q.id === questionId);
-                const displayAnswer = formatAnswerValue(questionId, answerValue as string);
+                let displayAnswer = '';
+                
+                if (question) {
+                  if (question.responseType === 'select_other') {
+                    displayAnswer = formatSelectOtherDisplay(
+                      answerValue as string,
+                      question.options,
+                    );
+                  } else if (question.responseType === 'select_countries') {
+                    displayAnswer = formatSelectCountriesDisplay(
+                      answerValue as string,
+                      question.options,
+                    );
+                  } else if (question.responseType === 'yesno' || question.responseType === 'select') {
+                    const answer = question.options?.find(opt => opt.value === answerValue);
+                    displayAnswer = answer?.label || answerValue || 'Not answered';
+                  } else if (question.responseType === 'ynlist') {
+                    try {
+                      const ynAnswers = JSON.parse(answerValue as string);
+                      displayAnswer = Object.entries(ynAnswers)
+                        .map(([key, val]) => {
+                          const option = question.options?.find(opt => opt.value === key);
+                          return `${option?.label || key}: ${val}`;
+                        })
+                        .join('; ');
+                    } catch {
+                      displayAnswer = answerValue as string;
+                    }
+                  } else if (question.responseType === 'yesno_details') {
+                    displayAnswer = formatYesNoDetailsDisplay(
+                      answerValue as string,
+                      question.detailsKind ?? 'countries',
+                      question.options,
+                    );
+                  } else if (question.responseType === 'entities') {
+                    displayAnswer = formatEntitiesDisplay(answerValue as string);
+                  } else if (question.responseType === 'multiselect') {
+                    const selectedValues = (answerValue as string).split(',').map((v) => v.trim()).filter(Boolean);
+                    displayAnswer = selectedValues
+                      .map((val) => question.options?.find((opt) => opt.value === val)?.label || val)
+                      .join(', ') || 'Not answered';
+                  } else {
+                    displayAnswer = answerValue as string || 'Not answered';
+                  }
+                } else {
+                  displayAnswer = answerValue as string || 'Not answered';
+                }
                 
                 return `
                   <tr>
@@ -1241,25 +1773,107 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   let userEmailSent = false;
   
   try {
+    // Validate email address (always check this)
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(personalInfo.email)) {
+      console.error('Invalid email address:', personalInfo.email);
+      return res.status(400).json({ message: 'Invalid email address provided.' });
+    }
+
     console.log('Starting assessment processing for:', personalInfo.email, personalInfo.company);
 
-    const submission = await createAssessmentSubmission(personalInfo, answers);
-    console.log('Assessment submission saved to Postgres');
+    let submission: { id: string } | null = null;
+    if (process.env.DATABASE_URL) {
+      try {
+        submission = await createAssessmentSubmission(personalInfo, answers);
+        console.log('Assessment submission saved to Postgres');
+      } catch (dbError) {
+        console.error('Failed to save assessment to Postgres:', dbError);
+      }
+    } else {
+      console.warn('DATABASE_URL not configured - skipping Postgres save');
+    }
 
-    // Generate PDF buffer
-    console.log('Generating PDF buffer...');
-    const pdfBuffer = await generatePDFBuffer(personalInfo, answers);
-    console.log('PDF buffer generated successfully, size:', pdfBuffer.length, 'bytes');
-
-    // Upload PDF to S3
-    console.log('Starting S3 upload for company:', personalInfo.company);
-    const pdfS3Url = await uploadPDFToS3(pdfBuffer, personalInfo.company, personalInfo);
-    console.log('S3 upload result:', pdfS3Url ? 'Success' : 'Failed', pdfS3Url || '');
-    if (pdfS3Url) {
-      await db.assessmentSubmission.update({
-        where: { id: submission.id },
-        data: { pdfS3Url },
+    // Check if email is configured (but don't block if it's not - Google Sheets is more important)
+    const emailConfigured = !!(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS && process.env.FROM_EMAIL);
+    if (!emailConfigured) {
+      console.warn('Email configuration is missing - will skip email sending but still write to Google Sheets:', {
+        SMTP_HOST: !!process.env.SMTP_HOST,
+        SMTP_USER: !!process.env.SMTP_USER,
+        SMTP_PASS: !!process.env.SMTP_PASS,
+        FROM_EMAIL: !!process.env.FROM_EMAIL,
       });
+    }
+
+    // Generate PDF buffer once (used for both S3 upload and email attachment)
+    let pdfBuffer: Buffer | null = null;
+    let pdfS3Url: string | null = null;
+    
+    try {
+      console.log('Generating PDF buffer...');
+      pdfBuffer = await generatePDFBuffer(personalInfo, answers);
+      console.log('PDF buffer generated successfully, size:', pdfBuffer.length, 'bytes');
+
+      // Upload PDF to S3 (optional)
+      console.log('Starting S3 upload for company:', personalInfo.company);
+      pdfS3Url = await uploadPDFToS3(pdfBuffer, personalInfo.company, personalInfo);
+      
+      if (pdfS3Url) {
+        console.log('S3 upload SUCCESS - URL:', pdfS3Url);
+        if (submission) {
+          try {
+            await db.assessmentSubmission.update({
+              where: { id: submission.id },
+              data: { pdfS3Url },
+            });
+          } catch (dbError) {
+            console.error('Failed to update submission PDF URL in Postgres:', dbError);
+          }
+        }
+      } else {
+        console.warn('S3 upload FAILED or skipped - PDF S3 URL will be empty in Google Sheets');
+        console.warn('To enable S3 uploads, configure AWS credentials in .env.local:');
+        console.warn('  - AWS_ACCESS_KEY_ID');
+        console.warn('  - AWS_SECRET_ACCESS_KEY');
+        console.warn('  - AWS_S3_BUCKET_NAME');
+        console.warn('  - AWS_REGION');
+      }
+    } catch (pdfError) {
+      console.error('PDF generation/upload failed, continuing without PDF URL:', pdfError);
+      if (pdfError instanceof Error) {
+        console.error('PDF Error details:', {
+          message: pdfError.message,
+          stack: process.env.NODE_ENV === 'development' ? pdfError.stack : undefined,
+        });
+      }
+    }
+
+    // Write assessment data to Google Sheets FIRST (before email processing)
+    // This ensures data is captured even if email fails
+    console.log('Writing to Google Sheets...');
+    try {
+      await writeToGoogleSheets(personalInfo, answers, assessment.totalScore, pdfS3Url);
+      console.log('Google Sheets write completed');
+    } catch (sheetsError) {
+      console.error('Error writing to Google Sheets:', sheetsError);
+      // Don't fail the whole request if Google Sheets fails, but log it
+    }
+
+    // If email is not configured, return success (Google Sheets already wrote)
+    if (!emailConfigured) {
+      console.log('Assessment processing completed (Google Sheets only, email skipped)');
+      return res.status(200).json({ 
+        message: 'Assessment results saved successfully',
+        emailSent: false,
+        sheetsWritten: true,
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    // If PDF generation failed and email is configured, generate it now for email attachment
+    if (!pdfBuffer) {
+      console.log('Generating PDF buffer for email attachment...');
+      pdfBuffer = await generatePDFBuffer(personalInfo, answers);
     }
 
     // Prepare user email content with appointment booking information
@@ -1396,86 +2010,80 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       </html>
     `;
 
-    if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS && process.env.FROM_EMAIL) {
-      const transporter = nodemailer.createTransport({
-        host: process.env.SMTP_HOST,
-        port: parseInt(process.env.SMTP_PORT || '587'),
-        secure: process.env.SMTP_SECURE === 'true',
-        auth: {
-          user: process.env.SMTP_USER,
-          pass: process.env.SMTP_PASS,
-        },
-      });
-
-      try {
-        await transporter.verify();
-        console.log('SMTP server connection verified');
-      } catch (verifyError: any) {
-        console.error('SMTP verification failed:', verifyError);
-        console.error('SMTP Config:', {
-          host: process.env.SMTP_HOST,
-          port: process.env.SMTP_PORT,
-          secure: process.env.SMTP_SECURE,
-          user: process.env.SMTP_USER ? '***' : 'MISSING',
-          pass: process.env.SMTP_PASS ? '***' : 'MISSING',
-          from: process.env.FROM_EMAIL,
-        });
-      }
-
-      console.log('Sending email to user:', personalInfo.email);
-      try {
-        const userEmailResult = await transporter.sendMail({
-          from: process.env.FROM_EMAIL,
-          to: personalInfo.email,
-          replyTo: 'anisha@cs.rsm.ae',
-          subject: `E-Invoicing Assessment Report – ${personalInfo.company}`,
-          html: userEmailContent,
-          attachments: [
-            {
-              filename: `${personalInfo.company.replace(/[^a-zA-Z0-9]/g, '_')}_E_Invoicing_Assessment_Report.pdf`,
-              content: pdfBuffer,
-              contentType: 'application/pdf',
-            },
-          ],
-        });
-        console.log('User email sent successfully. MessageId:', userEmailResult.messageId);
-        userEmailSent = true;
-      } catch (userEmailError: any) {
-        console.error('Error sending user email:', userEmailError);
-        console.error('Email error details:', {
-          message: userEmailError?.message,
-          code: userEmailError?.code,
-          response: userEmailError?.response,
-          command: userEmailError?.command,
-        });
-      }
-
-      console.log('Sending internal notification email...');
-      try {
-        const internalEmailResult = await transporter.sendMail({
-          from: process.env.FROM_EMAIL,
-          to: "arpit.m@nexuses.in,anisha.a@nexuses.in",
-          replyTo: 'anisha@cs.rsm.ae',
-          subject: "E-Invoicing Assessment - UAE",
-          html: emailContent,
-        });
-        console.log('Internal email sent successfully. MessageId:', internalEmailResult.messageId);
-      } catch (internalEmailError) {
-        console.error('Error sending internal email:', internalEmailError);
-      }
-    } else {
-      console.warn('Skipping assessment emails because SMTP environment variables are missing');
-    }
-
-    // Write assessment data to Google Sheets
-    console.log('Writing to Google Sheets...');
+    // Verify transporter is configured
     try {
-      await writeToGoogleSheets(personalInfo, answers, assessment.totalScore, pdfS3Url);
-      console.log('Google Sheets write completed');
-    } catch (sheetsError) {
-      console.error('Error writing to Google Sheets:', sheetsError);
-      // Continue even if Google Sheets write fails
+      await transporter.verify();
+      console.log('SMTP server connection verified');
+    } catch (verifyError: any) {
+      console.error('SMTP verification failed:', verifyError);
+      console.error('SMTP Config:', {
+        host: process.env.SMTP_HOST,
+        port: process.env.SMTP_PORT,
+        secure: process.env.SMTP_SECURE,
+        user: process.env.SMTP_USER ? '***' : 'MISSING',
+        pass: process.env.SMTP_PASS ? '***' : 'MISSING',
+        from: process.env.FROM_EMAIL,
+      });
+      return res.status(500).json({ 
+        message: 'Email server configuration error. Please contact support.',
+        error: process.env.NODE_ENV === 'development' ? String(verifyError) : undefined
+      });
     }
+
+    // Send email to user with PDF attachment
+    console.log('Sending email to user:', personalInfo.email);
+    try {
+      const userEmailResult = await transporter.sendMail({
+        from: process.env.FROM_EMAIL,
+        to: personalInfo.email,
+        replyTo: getReplyToEmail(),
+        subject: `E-Invoicing Assessment Report – ${personalInfo.company}`,
+        html: userEmailContent,
+        attachments: [
+          {
+            filename: `${personalInfo.company.replace(/[^a-zA-Z0-9]/g, '_')}_E_Invoicing_Assessment_Report.pdf`,
+            content: pdfBuffer,
+            contentType: 'application/pdf',
+          },
+        ],
+      });
+      console.log('User email sent successfully. MessageId:', userEmailResult.messageId);
+      userEmailSent = true;
+    } catch (userEmailError: any) {
+      console.error('Error sending user email:', userEmailError);
+      console.error('Email error details:', {
+        message: userEmailError?.message,
+        code: userEmailError?.code,
+        response: userEmailError?.response,
+        command: userEmailError?.command,
+      });
+      // Continue to send internal email even if user email fails
+    }
+
+    // Send internal notification email (with PDF attachment)
+    console.log('Sending internal notification email...');
+    try {
+      const internalEmailResult = await transporter.sendMail({
+        from: process.env.FROM_EMAIL,
+        to: getInternalAssessmentRecipients(),
+        replyTo: getReplyToEmail(),
+        subject: "E-Invoicing Assessment - UAE",
+        html: emailContent,
+        attachments: [
+          {
+            filename: `${personalInfo.company.replace(/[^a-zA-Z0-9]/g, '_')}_E_Invoicing_Assessment_Report.pdf`,
+            content: pdfBuffer,
+            contentType: 'application/pdf',
+          },
+        ],
+      });
+      console.log('Internal email sent successfully. MessageId:', internalEmailResult.messageId);
+    } catch (internalEmailError) {
+      console.error('Error sending internal email:', internalEmailError);
+      // Continue even if internal email fails
+    }
+
+    // Google Sheets write already happened above (before email processing)
 
     console.log('Assessment processing completed successfully');
     res.status(200).json({ 

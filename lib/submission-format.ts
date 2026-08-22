@@ -1,4 +1,8 @@
 import { questionsData } from "@/lib/questions";
+import { formatEntitiesDisplay } from "@/lib/entities";
+import { formatSelectOtherDisplay } from "@/lib/select-other";
+import { formatSelectCountriesDisplay } from "@/lib/select-countries";
+import { formatYesNoDetailsDisplay } from "@/lib/yesno-details";
 
 export type SubmissionAnswer = {
   questionId: string;
@@ -12,6 +16,26 @@ export function formatAnswerValue(questionId: string, answerValue?: string): str
 
   if (!question) {
     return answerValue || "Not answered";
+  }
+
+  if (question.responseType === "entities") {
+    return formatEntitiesDisplay(answerValue || "");
+  }
+
+  if (question.responseType === "select_other") {
+    return formatSelectOtherDisplay(answerValue || "");
+  }
+
+  if (question.responseType === "select_countries") {
+    return formatSelectCountriesDisplay(answerValue || "");
+  }
+
+  if (question.responseType === "yesno_details") {
+    return formatYesNoDetailsDisplay(
+      answerValue || "",
+      question.detailsKind ?? "countries",
+      question.options,
+    );
   }
 
   if (question.responseType === "yesno" || question.responseType === "select") {

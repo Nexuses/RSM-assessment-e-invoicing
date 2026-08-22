@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import nodemailer from "nodemailer";
 import { google } from "googleapis";
+import { getConsultationRecipients, getReplyToEmail } from "@/lib/email-config";
 import { db } from "@/lib/db";
 
 interface ConsultationPayload {
@@ -19,7 +20,16 @@ interface ConsultationPayload {
   };
 }
 
-const sheetName = "Sheet2";
+const spreadsheetId =
+  process.env.GOOGLE_SHEETS_SPREADSHEET_ID ||
+  process.env.GOOGLE_SHEET_ID ||
+  // Default to the sheet you provided in chat
+  "17IoNsq0xAWSzJVgwnPC_Ej_eUGucW9iw6iVbvanUunE";
+
+const sheetName =
+  process.env.GOOGLE_SHEETS_CONSULTATION_SHEET_NAME ||
+  process.env.GOOGLE_SHEETS_SHEET_NAME ||
+  "Sheet2";
 
 const columnToLetter = (column: number) => {
   let temp;
@@ -38,12 +48,6 @@ const appendToSheet = async (payload: ConsultationPayload) => {
     // Check if credentials are available
     if (!process.env.GOOGLE_SERVICE_ACCOUNT_CREDENTIALS) {
       console.error('GOOGLE_SERVICE_ACCOUNT_CREDENTIALS environment variable is not set');
-      return;
-    }
-
-    const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID || process.env.GOOGLE_SHEET_ID;
-    if (!spreadsheetId) {
-      console.error('GOOGLE_SHEETS_SPREADSHEET_ID (or GOOGLE_SHEET_ID) environment variable is not set');
       return;
     }
 
@@ -142,17 +146,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ message: "Missing required fields." });
   }
 
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (!emailRegex.test(email)) {
-    return res.status(400).json({ message: "Invalid email address provided." });
-  }
-
   try {
-    await createConsultationRequest({ firstName, lastName, email, phone, context });
+    if (process.env.DATABASE_URL) {
+      try {
+        await createConsultationRequest({ firstName, lastName, email, phone, context });
+        console.log("Consultation request saved to Postgres");
+      } catch (dbError) {
+        console.error("Failed to save consultation request to Postgres:", dbError);
+      }
+    }
 
-    const adminRecipients =
-      process.env.CONSULTATION_RECIPIENTS ||
-      "arpit.m@nexuses.in, anisha@cs.rsm.ae, anisha.a@nexuses.in, GRC-Inquiry@RSM.ae, rsm-tech-aaaahib5qyhpf2k6egbqwrugwa@nexuses.slack.com";
+    const transporter = buildTransporter();
+    const adminRecipients = getConsultationRecipients();
 
     const adminHtml = `
       <!DOCTYPE html>
@@ -340,40 +345,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       </html>
     `;
 
-    if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS && process.env.FROM_EMAIL) {
-      const transporter = buildTransporter();
+    await transporter.sendMail({
+      from: process.env.FROM_EMAIL,
+      to: adminRecipients,
+      subject: "New consultation request from assessment summary",
+      html: adminHtml,
+    });
 
-      try {
-        await transporter.sendMail({
-          from: process.env.FROM_EMAIL,
-          to: adminRecipients,
-          subject: "New consultation request from assessment summary",
-          html: adminHtml,
-        });
-      } catch (error) {
-        console.error("Failed to send consultation admin email:", error);
-      }
+    await transporter.sendMail({
+      from: process.env.FROM_EMAIL,
+      to: email,
+      replyTo: getReplyToEmail(),
+      subject: "Thank you for booking a consultation with RSM",
+      html: userHtml,
+    });
 
-      try {
-        await transporter.sendMail({
-          from: process.env.FROM_EMAIL,
-          to: email,
-          replyTo: "cybersecurity@rsm.com.kw",
-          subject: "Thank you for booking a consultation with RSM",
-          html: userHtml,
-        });
-      } catch (error) {
-        console.error("Failed to send consultation confirmation email:", error);
-      }
-    } else {
-      console.warn("Skipping consultation emails because SMTP environment variables are missing");
-    }
-
-    try {
-      await appendToSheet({ firstName, lastName, email, phone: phone || "", context });
-    } catch (error) {
-      console.error("Failed to write consultation request to Google Sheets:", error);
-    }
+    await appendToSheet({ firstName, lastName, email, phone: phone || "", context });
 
     return res.status(200).json({ message: "Consultation request submitted successfully." });
   } catch (error) {

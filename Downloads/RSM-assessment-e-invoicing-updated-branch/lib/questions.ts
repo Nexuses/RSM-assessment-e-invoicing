@@ -1,14 +1,8 @@
-import { INVOICE_VOLUME_BAND_OPTIONS } from '@/lib/entities';
-
 export type ResponseType =
   | 'yesno'
-  | 'yesno_details'
-  | 'entities'
   | 'text'
   | 'number'
   | 'select'
-  | 'select_other'
-  | 'select_countries'
   | 'multiselect'
   | 'ynlist';
 
@@ -25,14 +19,7 @@ export type Question = {
     max?: number;
     pattern?: string;
   };
-  /** For yesno_details: label and validation for follow-up list fields */
-  detailsKind?: 'countries' | 'branches';
 };
-
-const invoiceVolumeOptions = INVOICE_VOLUME_BAND_OPTIONS.map((option) => ({
-  value: option.value,
-  label: option.label,
-}));
 
 export const questionsData: Question[] = [
   {
@@ -43,6 +30,7 @@ export const questionsData: Question[] = [
     options: [
       { value: 'gt_50m', label: 'Greater than AED 50 Million (Likely Phase 1)' },
       { value: 'lt_50m', label: 'Less than AED 50 Million (Likely Phase 2)' },
+      { value: 'not_registered_vat', label: 'Not Registered for VAT' },
     ],
   },
   {
@@ -90,28 +78,15 @@ export const questionsData: Question[] = [
     ],
   },
   {
-    id: 'q6_inbound',
-    text: 'What is your estimated annual volume of Purchasing order excluding imports (Inbound)?',
-    subject: 'Part 2: Volume & Scope',
-    responseType: 'select',
-    options: invoiceVolumeOptions,
-  },
-  {
     id: 'q6',
     text: 'What is your estimated annual volume of Sales Invoices (Outbound)?',
     subject: 'Part 2: Volume & Scope',
     responseType: 'select',
-    options: invoiceVolumeOptions,
-  },
-  {
-    id: 'q9',
-    text: 'Do you require e-invoicing compliance for countries other than the UAE?',
-    subject: 'Part 2: Volume & Scope',
-    responseType: 'select_countries',
     options: [
-      { value: 'uae_only', label: 'No, UAE only' },
-      { value: 'ksa', label: 'Yes, KSA (ZATCA)' },
-      { value: 'global', label: 'Yes, other Global mandates' },
+      { value: 'lt_1k', label: 'Less than 1,000 invoices/year' },
+      { value: '1k_10k', label: '1,000 - 10,000 invoices/year' },
+      { value: '10k_100k', label: '10,000 - 100,000 invoices/year' },
+      { value: 'gt_100k', label: '100,000+ invoices/year' },
     ],
   },
   {
@@ -126,34 +101,125 @@ export const questionsData: Question[] = [
     ],
   },
   {
-    id: 'q9_entities',
-    text: 'Entity details (add each legal entity if part of a group)',
-    subject: 'Part 2A: Additional Implementation Inputs',
-    responseType: 'entities',
-  },
-  {
     id: 'q8',
     text: 'Do you issue invoices from multiple locations or branches?',
     subject: 'Part 2: Volume & Scope',
+    responseType: 'yesno',
+    options: [
+      { value: '0', label: 'No, centralized invoicing' },
+      { value: '1', label: 'Yes, multiple branches issuing independently' },
+    ],
+  },
+  {
+    id: 'q9',
+    text: 'Do you require e-invoicing compliance for countries other than the UAE?',
+    subject: 'Part 2: Volume & Scope',
     responseType: 'select',
     options: [
-      { value: '1', label: 'Yes' },
-      { value: '0', label: 'No' },
+      { value: 'uae_only', label: 'No, UAE only' },
+      { value: 'ksa', label: 'Yes, KSA (ZATCA)' },
+      { value: 'global', label: 'Yes, other Global mandates' },
     ],
+  },
+  {
+    id: 'q18',
+    text: 'Company Name (list all entities if part of a group)',
+    subject: 'Part 2A: Additional Business Inputs',
+    responseType: 'text',
+    placeholder: 'Enter company name(s)',
+  },
+  {
+    id: 'q19',
+    text: 'Are any entities part of the FTA pilot or planning voluntary adoption by July 2026? (If yes, specify entities)',
+    subject: 'Part 2A: Additional Business Inputs',
+    responseType: 'text',
+    placeholder: 'Yes / No (if yes, specify entities)',
+  },
+  {
+    id: 'q20',
+    text: 'Number of entities with revenue above AED 50M (Phase 1)',
+    subject: 'Part 2A: Additional Business Inputs',
+    responseType: 'number',
+    placeholder: 'Enter number of entities',
+    validation: { min: 0 },
+  },
+  {
+    id: 'q21',
+    text: 'Number of entities with revenue below AED 50M (Phase 2)',
+    subject: 'Part 2A: Additional Business Inputs',
+    responseType: 'number',
+    placeholder: 'Enter number of entities',
+    validation: { min: 0 },
+  },
+  {
+    id: 'q22',
+    text: 'Estimated number of sales invoices per year (B2B & B2G) per entity',
+    subject: 'Part 2A: Additional Business Inputs',
+    responseType: 'number',
+    placeholder: 'Enter estimated number',
+    validation: { min: 0 },
+  },
+  {
+    id: 'q23',
+    text: 'Estimated number of purchase invoices per year (excluding imports) per entity',
+    subject: 'Part 2A: Additional Business Inputs',
+    responseType: 'number',
+    placeholder: 'Enter estimated number',
+    validation: { min: 0 },
+  },
+  {
+    id: 'q24',
+    text: 'Which ERP or invoicing systems are currently used?',
+    subject: 'Part 2A: Additional Business Inputs',
+    responseType: 'text',
+    placeholder: 'Enter ERP/invoicing systems',
+  },
+  {
+    id: 'q25',
+    text: 'Who will handle system integration?',
+    subject: 'Part 2A: Additional Business Inputs',
+    responseType: 'select',
+    options: [
+      { value: 'customer_team', label: 'Customer team' },
+      { value: 'vendor', label: 'Vendor' },
+      { value: 'require_asp_support', label: 'Require ASP support' },
+    ],
+  },
+  {
+    id: 'q26',
+    text: 'Do you need purchase invoice (AP) integration with ERP?',
+    subject: 'Part 2A: Additional Business Inputs',
+    responseType: 'select',
+    options: [
+      { value: 'full_integration', label: 'Full integration' },
+      { value: 'dashboard_manual_entry', label: 'Dashboard only (manual entry)' },
+    ],
+  },
+  {
+    id: 'q27',
+    text: 'Do you have e-Invoicing requirements in other countries? (If yes, specify countries)',
+    subject: 'Part 2A: Additional Business Inputs',
+    responseType: 'text',
+    placeholder: 'Yes / No (if yes, specify countries)',
+  },
+  {
+    id: 'q28',
+    text: 'Any additional requirements or comments?',
+    subject: 'Part 2A: Additional Business Inputs',
+    responseType: 'text',
+    placeholder: 'Add any additional details',
   },
   {
     id: 'q10',
     text: 'Which ERP or Accounting Software do you currently use?',
     subject: 'Part 3: Technical Readiness',
-    responseType: 'select_other',
+    responseType: 'select',
     options: [
-      { value: 'tier1', label: 'SAP / Oracle / Microsoft Dynamics' },
-      { value: 'tier2', label: 'Sage / Zoho / QuickBooks / Xero' },
+      { value: 'tier1', label: 'Tier 1: SAP / Oracle / Microsoft Dynamics' },
+      { value: 'tier2', label: 'Tier 2/Cloud: Sage / Zoho / QuickBooks / Xero' },
       { value: 'custom', label: 'Legacy/Custom-built ERP' },
       { value: 'manual', label: 'Manual: Excel / Word' },
-      { value: 'other', label: 'Other' },
     ],
-    placeholder: 'Specify ERP or accounting software',
   },
   {
     id: 'q11',
@@ -164,39 +230,6 @@ export const questionsData: Question[] = [
       { value: 'api', label: 'Yes, REST/SOAP APIs are available' },
       { value: 'sftp', label: 'No, we use SFTP / File exports (CSV/XML)' },
       { value: 'manual', label: 'No, Manual Only' },
-      { value: 'unknown', label: "I don't know" },
-    ],
-  },
-  {
-    id: 'q9_8',
-    text: 'Who will handle system integration?',
-    subject: 'Part 2A: Additional Implementation Inputs',
-    responseType: 'select',
-    options: [
-      { value: 'customer_team', label: 'Client team' },
-      { value: 'vendor', label: 'Vendor' },
-      { value: 'require_asp_support', label: 'Require ASP support' },
-    ],
-  },
-  {
-    id: 'q9_9',
-    text: 'Do you require integration with the ASP platform?',
-    subject: 'Part 2A: Additional Implementation Inputs',
-    responseType: 'select',
-    options: [
-      { value: 'yes', label: 'Yes' },
-      { value: 'no', label: 'No' },
-    ],
-  },
-  {
-    id: 'q9_12',
-    text: 'What type of invoice integration do you require?',
-    subject: 'Part 2A: Additional Implementation Inputs',
-    responseType: 'select',
-    options: [
-      { value: 'sales_only', label: 'Sales invoices only' },
-      { value: 'purchase_only', label: 'Purchase invoices only' },
-      { value: 'both', label: 'Both sales and purchase invoices' },
     ],
   },
   {
@@ -209,6 +242,17 @@ export const questionsData: Question[] = [
       { value: 'cloud_global', label: 'Cloud (Global/Outside UAE)' },
       { value: 'onprem_uae', label: 'On-Premise Server (UAE)' },
       { value: 'local', label: 'Local Computers/Laptops' },
+    ],
+  },
+  {
+    id: 'q13',
+    text: 'Do you have an internal IT team capable of managing system integration?',
+    subject: 'Part 3: Technical Readiness',
+    responseType: 'select',
+    options: [
+      { value: 'inhouse', label: 'Yes, in-house team' },
+      { value: 'external', label: 'No, we rely on an external vendor' },
+      { value: 'none', label: 'No IT resources available' },
     ],
   },
   {
@@ -243,10 +287,14 @@ export const questionsData: Question[] = [
     ],
   },
   {
-    id: 'q9_11',
-    text: 'Any additional requirements or comments?',
-    subject: 'Part 2A: Additional Implementation Inputs',
-    responseType: 'text',
-    placeholder: 'Enter any additional notes',
+    id: 'q17',
+    text: 'What is your preferred integration model?',
+    subject: 'Part 4: Invoice Complexity',
+    responseType: 'select',
+    options: [
+      { value: 'full', label: 'Full Integration' },
+      { value: 'hybrid', label: 'Hybrid' },
+      { value: 'manual', label: 'Manual' },
+    ],
   },
 ];

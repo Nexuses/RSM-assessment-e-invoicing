@@ -4,15 +4,49 @@ export type AssessmentAxisResult = {
   recommendation: string;
 };
 
+export type PhaseRecommendation = {
+  phase: 'phase_1' | 'phase_2' | 'other';
+  label: string;
+  description: string;
+};
+
 export type AssessmentResult = {
   eligible: boolean;
   ineligibleReason?: string;
+  phaseRecommendation: PhaseRecommendation;
   urgency: AssessmentAxisResult;
   complexity: AssessmentAxisResult;
   totalScore: number;
   maxUrgencyScore: number;
   maxComplexityScore: number;
 };
+
+/** Phase is driven by question 1 (q2): annual aggregate turnover band. */
+export function getPhaseFromTurnover(answers: Record<string, string>): PhaseRecommendation {
+  switch (answers.q2) {
+    case 'gt_50m':
+      return {
+        phase: 'phase_1',
+        label: 'Phase 1',
+        description:
+          'Contact RSM to schedule a meeting to assess your technical and compliance readiness for Phase 1 (critical priority).',
+      };
+    case 'lt_50m':
+      return {
+        phase: 'phase_2',
+        label: 'Phase 2',
+        description:
+          'Start planning for Phase 2 compliance (2027+) and engage with a solution provider.',
+      };
+    default:
+      return {
+        phase: 'other',
+        label: 'To be confirmed',
+        description:
+          'Monitor regulatory updates and prepare when required. Phase applicability could not be determined from your turnover response.',
+      };
+  }
+}
 
 const MAX_URGENCY = 23;
 const MAX_COMPLEXITY = 81;
@@ -88,6 +122,7 @@ export function computeAssessment(answers: Record<string, string>): AssessmentRe
       eligible: false,
       ineligibleReason:
         'Not registered for VAT in the UAE. Per the assessment logic, this disqualifies the entity from the e-invoicing mandate scope for scoring purposes.',
+      phaseRecommendation: getPhaseFromTurnover(answers),
       urgency: { score: 0, category: 'Out of scope', recommendation: 'No scoring applied.' },
       complexity: { score: 0, category: 'N/A', recommendation: 'No scoring applied.' },
       totalScore: 0,
@@ -142,21 +177,24 @@ export function computeAssessment(answers: Record<string, string>): AssessmentRe
 
   const urgencyScore = q1 + q2 + q3 + q4;
 
-  // Axis B (Complexity): Q6 - Q17
-  const q6 = (() => {
-    switch (answers.q6) {
-      case 'lt_1k':
+  // Axis B (Complexity): Q6 - Q16
+  const volumeBandScore = (value?: string) => {
+    switch (value) {
+      case '1_3k':
         return 1;
-      case '1k_10k':
+      case '3_5k':
         return 3;
-      case '10k_100k':
+      case '5_7k':
         return 5;
-      case 'gt_100k':
+      case '7_10k':
         return 10;
       default:
         return 0;
     }
-  })();
+  };
+
+  const q6Inbound = volumeBandScore(answers.q6_inbound);
+  const q6 = volumeBandScore(answers.q6);
 
   const q7 = (() => {
     switch (answers.q7) {
@@ -171,10 +209,30 @@ export function computeAssessment(answers: Record<string, string>): AssessmentRe
     }
   })();
 
-  const q8 = answers.q8 === '1' ? 3 : 0;
+  const q8 = (() => {
+    const raw = answers.q8;
+    if (raw === '1') return 3;
+    if (raw === '0') return 0;
+    try {
+      const parsed = JSON.parse(raw) as { choice?: string };
+      if (parsed.choice === '1') return 3;
+      if (parsed.choice === '0' || parsed.choice === 'no_branch') return 0;
+    } catch {
+      // legacy plain value
+    }
+    return 0;
+  })();
 
   const q9 = (() => {
-    switch (answers.q9) {
+    const raw = answers.q9;
+    let value = raw;
+    try {
+      const parsed = JSON.parse(raw) as { value?: string };
+      if (parsed.value) value = parsed.value;
+    } catch {
+      // plain value
+    }
+    switch (value) {
       case 'uae_only':
         return 0;
       case 'ksa':
@@ -186,12 +244,21 @@ export function computeAssessment(answers: Record<string, string>): AssessmentRe
   })();
 
   const q10 = (() => {
-    switch (answers.q10) {
+    const raw = answers.q10;
+    let value = raw;
+    try {
+      const parsed = JSON.parse(raw) as { value?: string };
+      if (parsed.value) value = parsed.value;
+    } catch {
+      // plain value
+    }
+    switch (value) {
       case 'tier1':
         return 3;
       case 'tier2':
         return 1;
       case 'custom':
+      case 'other':
         return 8;
       case 'manual':
         return 15;
@@ -208,6 +275,8 @@ export function computeAssessment(answers: Record<string, string>): AssessmentRe
         return 5;
       case 'manual':
         return 10;
+      case 'unknown':
+        return 5;
       default:
         return 0;
     }
@@ -220,18 +289,6 @@ export function computeAssessment(answers: Record<string, string>): AssessmentRe
         return 0;
       case 'cloud_global':
       case 'local':
-        return 5;
-      default:
-        return 0;
-    }
-  })();
-
-  const q13 = (() => {
-    switch (answers.q13) {
-      case 'inhouse':
-        return 0;
-      case 'external':
-      case 'none':
         return 5;
       default:
         return 0;
@@ -254,26 +311,15 @@ export function computeAssessment(answers: Record<string, string>): AssessmentRe
     }
   })();
 
-  const q17 = (() => {
-    switch (answers.q17) {
-      case 'full':
-        return 5;
-      case 'hybrid':
-        return 3;
-      case 'manual':
-        return 0;
-      default:
-        return 0;
-    }
-  })();
-
-  const complexityScore = q6 + q7 + q8 + q9 + q10 + q11 + q12 + q13 + q14 + q15 + q16 + q17;
+  const complexityScore =
+    q6Inbound + q6 + q7 + q8 + q9 + q10 + q11 + q12 + q14 + q15 + q16;
 
   const urgency = urgencyCategory(urgencyScore);
   const complexity = complexityCategory(complexityScore);
 
   return {
     eligible: true,
+    phaseRecommendation: getPhaseFromTurnover(answers),
     urgency,
     complexity,
     totalScore: urgencyScore + complexityScore,

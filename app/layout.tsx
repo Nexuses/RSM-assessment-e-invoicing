@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
 import { GoogleAnalytics } from '@next/third-parties/google'
+import { Analytics } from '@vercel/analytics/next'
 
 const geistSans = localFont({
   src: "./fonts/GeistVF.woff",
@@ -21,7 +22,7 @@ export const metadata: Metadata = {
   openGraph: {
     images: [
       {
-        url: "https://22527425.fs1.hubspotusercontent-na2.net/hubfs/22527425/RSM/Frame%201171276000.png",
+        url: "https://cdn-nexlink.s3.us-east-2.amazonaws.com/rsm_592baa45-bdc5-429c-91d1-61f6c8ee8753.webp",
         width: 1920,
         height: 540,
         alt: "RSM E-invoicing Assessment Tool",
@@ -31,7 +32,7 @@ export const metadata: Metadata = {
   twitter: {
     card: "summary_large_image",
     images: [
-      "https://22527425.fs1.hubspotusercontent-na2.net/hubfs/22527425/RSM/Frame%201171276000.png",
+      "https://cdn-nexlink.s3.us-east-2.amazonaws.com/rsm_592baa45-bdc5-429c-91d1-61f6c8ee8753.webp",
     ],
   },
   icons: {
@@ -50,6 +51,7 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         {children}
+        <Analytics />
       </body>
       <GoogleAnalytics gaId="G-1NXS62CTQ7" />
     </html>

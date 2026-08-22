@@ -1,8 +1,13 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import React from 'react';
 import { Document, Page, Text, View, StyleSheet, pdf, Image } from '@react-pdf/renderer';
+import { getInquiryEmail } from '@/lib/email-config';
 import { questionsData } from '@/lib/questions';
 import { computeAssessment } from '@/lib/scoring';
+import { formatEntitiesDisplay } from '@/lib/entities';
+import { formatYesNoDetailsDisplay } from '@/lib/yesno-details';
+import { formatSelectOtherDisplay } from '@/lib/select-other';
+import { formatSelectCountriesDisplay } from '@/lib/select-countries';
 
 // Add language parameter to the request body type
 interface RequestBody {
@@ -71,8 +76,9 @@ const createStyles = () => StyleSheet.create({
     alignItems: 'flex-end',
   },
   logo: {
-    width: 80,
-    height: 40,
+    width: 100,
+    height: 48,
+    objectFit: 'contain',
   },
   companyName: {
     fontSize: 18,
@@ -398,6 +404,13 @@ const createStyles = () => StyleSheet.create({
     lineHeight: 1.5,
     textAlign: 'left',
   },
+  contactText: {
+    fontSize: 10,
+    color: '#1b3a57',
+    lineHeight: 1.6,
+    textAlign: 'left',
+    marginTop: 10,
+  },
 });
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -427,11 +440,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       
       // Split questions into chunks for better page management
       const allAnswers = Object.entries(answers);
-      const questionsPerSecondPage = 11;
-      const questionsPerPage = 15; // For subsequent pages
+      const questionsPerSecondPage = 5;
+      const questionsPerPage = 11; // For subsequent pages
       const questionChunks: [string, string][][] = [];
       
-      // First chunk: 11 questions (for second page)
+      // First chunk: 5 questions (for second page)
       if (allAnswers.length > 0) {
         questionChunks.push(allAnswers.slice(0, questionsPerSecondPage));
       }
@@ -447,7 +460,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           let displayAnswer = '';
           
           if (question) {
-            if (question.responseType === 'yesno' || question.responseType === 'select') {
+            if (question.responseType === 'select_other') {
+              displayAnswer = formatSelectOtherDisplay(answerValue, question.options);
+            } else if (question.responseType === 'select_countries') {
+              displayAnswer = formatSelectCountriesDisplay(answerValue, question.options);
+            } else if (question.responseType === 'yesno' || question.responseType === 'select') {
               const answer = question.options?.find(opt => opt.value === answerValue);
               displayAnswer = answer ? answer.label : answerValue || 'Not answered';
             } else if (question.responseType === 'ynlist') {
@@ -470,6 +487,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                   return option ? option.label : val;
                 })
                 .join(', ');
+            } else if (question.responseType === 'yesno_details') {
+              displayAnswer = formatYesNoDetailsDisplay(
+                answerValue,
+                question.detailsKind ?? 'countries',
+                question.options,
+              );
+            } else if (question.responseType === 'entities') {
+              displayAnswer = formatEntitiesDisplay(answerValue);
             } else {
               // text, number, or other types - use value directly
               displayAnswer = answerValue || 'Not answered';
@@ -587,6 +612,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 React.createElement(Text, { style: styles.disclaimerText },
                   "This is not a comprehensive E-invoicing assessment. This assessment only consists of about 15 questions to quickly assess a few key requirements of the E-invoicing framework. This assessment does not guarantee the detection of all existing or potential vulnerabilities and compliance gaps. It reflects the organization's compliance posture at the time of testing solely based on your responses to the assessment questions. The assessment report is intended solely for your internal use and must not be distributed, disclosed, or relied upon by third parties. RSM shall not be liable for any losses, damages, claims, or expenses arising from, or in connection with, the use of the assessment results."
                 )
+              )
+            ),
+
+            // Contact Information Section
+            React.createElement(View, { style: styles.section },
+              React.createElement(Text, { style: styles.contactText },
+                `If you have any questions or would like to learn more about UAE E-Invoicing requirements, please feel free to contact us at ${getInquiryEmail()}`
               )
             )
           )
