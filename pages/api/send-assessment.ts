@@ -11,6 +11,7 @@ import { formatSelectOtherDisplay } from '@/lib/select-other';
 import { formatSelectCountriesDisplay } from '@/lib/select-countries';
 import { google } from 'googleapis';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { db } from '@/lib/db';
 
 // Define the structure of the request body
 interface AssessmentData {
@@ -1593,6 +1594,31 @@ async function writeToGoogleSheets(
   }
 }
 
+async function createAssessmentSubmission(
+  personalInfo: PersonalInfo,
+  answers: Record<string, string>,
+) {
+  const assessmentResult = computeAssessment(answers);
+
+  return db.assessmentSubmission.create({
+    data: {
+      name: personalInfo.name,
+      email: personalInfo.email,
+      company: personalInfo.company,
+      position: personalInfo.position,
+      phone: personalInfo.phone || null,
+      website: personalInfo.website || null,
+      totalScore: assessmentResult.totalScore,
+      urgencyScore: assessmentResult.urgency.score,
+      urgencyCategory: assessmentResult.urgency.category,
+      complexityScore: assessmentResult.complexity.score,
+      complexityCategory: assessmentResult.complexity.category,
+      eligible: assessmentResult.eligible,
+      answers,
+    },
+  });
+}
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ message: 'Method Not Allowed' })
@@ -1756,6 +1782,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     console.log('Starting assessment processing for:', personalInfo.email, personalInfo.company);
 
+    let submission: { id: string } | null = null;
+    if (process.env.DATABASE_URL) {
+      try {
+        submission = await createAssessmentSubmission(personalInfo, answers);
+        console.log('Assessment submission saved to Postgres');
+      } catch (dbError) {
+        console.error('Failed to save assessment to Postgres:', dbError);
+      }
+    } else {
+      console.warn('DATABASE_URL not configured - skipping Postgres save');
+    }
+
     // Check if email is configured (but don't block if it's not - Google Sheets is more important)
     const emailConfigured = !!(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS && process.env.FROM_EMAIL);
     if (!emailConfigured) {
@@ -1782,6 +1820,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       
       if (pdfS3Url) {
         console.log('S3 upload SUCCESS - URL:', pdfS3Url);
+        if (submission) {
+          try {
+            await db.assessmentSubmission.update({
+              where: { id: submission.id },
+              data: { pdfS3Url },
+            });
+          } catch (dbError) {
+            console.error('Failed to update submission PDF URL in Postgres:', dbError);
+          }
+        }
       } else {
         console.warn('S3 upload FAILED or skipped - PDF S3 URL will be empty in Google Sheets');
         console.warn('To enable S3 uploads, configure AWS credentials in .env.local:');

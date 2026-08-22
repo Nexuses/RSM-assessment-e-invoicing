@@ -1,0 +1,45 @@
+version: "2.4"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: rsm-assessments-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-rsm_assessments}
+      POSTGRES_USER: ${POSTGRES_USER:-rsm}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rsm}
+    ports:
+      # Bind to localhost only — the Next.js app runs on the same host (PM2).
+      # Do not expose 5432 on 0.0.0.0 / the public internet.
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    # Tuned for a shared Postgres on a ~4GB VPS with multiple Next.js apps.
+    # Prefer one Postgres + many databases over one container per app.
+    command:
+      - postgres
+      - -c
+      - shared_buffers=128MB
+      - -c
+      - effective_cache_size=512MB
+      - -c
+      - work_mem=4MB
+      - -c
+      - maintenance_work_mem=64MB
+      - -c
+      - max_connections=40
+      - -c
+      - wal_buffers=4MB
+      - -c
+      - checkpoint_completion_target=0.9
+      - -c
+      - random_page_cost=1.1
+      - -c
+      - min_wal_size=80MB
+      - -c
+      - max_wal_size=1GB
+    mem_limit: 512m
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:

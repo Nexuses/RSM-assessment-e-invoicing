@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import nodemailer from "nodemailer";
 import { google } from "googleapis";
 import { getConsultationRecipients, getReplyToEmail } from "@/lib/email-config";
+import { db } from "@/lib/db";
 
 interface ConsultationPayload {
   firstName: string;
@@ -122,6 +123,18 @@ const buildTransporter = () =>
     },
   });
 
+const createConsultationRequest = async (payload: ConsultationPayload) =>
+  db.consultationRequest.create({
+    data: {
+      firstName: payload.firstName,
+      lastName: payload.lastName,
+      email: payload.email,
+      phone: payload.phone || null,
+      company: payload.context?.personalInfo?.company || null,
+      score: typeof payload.context?.score === "number" ? payload.context.score : null,
+    },
+  });
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "POST") {
     return res.status(405).json({ message: "Method Not Allowed" });
@@ -134,6 +147,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
+    if (process.env.DATABASE_URL) {
+      try {
+        await createConsultationRequest({ firstName, lastName, email, phone, context });
+        console.log("Consultation request saved to Postgres");
+      } catch (dbError) {
+        console.error("Failed to save consultation request to Postgres:", dbError);
+      }
+    }
+
     const transporter = buildTransporter();
     const adminRecipients = getConsultationRecipients();
 
