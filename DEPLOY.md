@@ -216,6 +216,27 @@ npx prisma migrate deploy
 npm run build
 ```
 
+If `npm run build` fails with `Cannot find module .../util-deprecate/node.js` or similar missing files under `node_modules`, the install was interrupted or corrupted (common on 4GB RAM). Clean and reinstall:
+
+```bash
+cd /var/www/RSM-assessment-e-invoicing
+rm -rf node_modules .next
+npm ci
+npm run build
+```
+
+If `npm ci` or `npm run build` is killed (no error, just stops), add temporary swap then retry:
+
+```bash
+sudo fallocate -l 2G /swapfile
+sudo chmod 600 /swapfile
+sudo mkswap /swapfile
+sudo swapon /swapfile
+npm ci && npm run build
+```
+
+Use **Node 20 LTS** on the VPS (`node -v` should show `v20.x`). Do not use `npm install` in production — use `npm ci` so it matches `package-lock.json`.
+
 ---
 
 
@@ -334,6 +355,7 @@ pm2 restart rsm-e-invoicing
 | Symptom                                       | Check                                                                                                                           |
 | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
 | Prisma migration fails                        | `DATABASE_URL` points at the Docker Postgres container; `docker-compose ps`; `docker-compose logs postgres`                     |
+| `npm run build`: missing `node_modules/...`   | Corrupt install. `rm -rf node_modules .next && npm ci && npm run build`. Add 2GB swap if the process is killed mid-install.        |
 | `docker-compose`: Permission denied on socket | User is not in the `docker` group yet. `sudo usermod -aG docker $USER`, then log out/in, or run `sudo docker-compose up -d`     |
 | `KeyError: 'ContainerConfig'` on recreate     | Old `docker-compose` 1.29 bug. `docker stop` + `docker rm` the postgres container, then `docker-compose up -d` (volume keeps DB) |
 | `/submissions` says unauthorized              | `SUBMISSIONS_PASSWORD` is set in `.env`; clear cookies and sign in again                                                        |

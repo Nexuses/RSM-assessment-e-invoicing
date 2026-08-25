@@ -14,10 +14,8 @@ const nextConfig = {
   },
   reactStrictMode: true,
   transpilePackages: ["framer-motion"],
-  serverExternalPackages: ['@react-pdf/renderer'],
-  turbopack: {
-    // Ensure this project directory is treated as the Turbo/Next root
-    root: __dirname,
+  experimental: {
+    serverComponentsExternalPackages: ['@react-pdf/renderer'],
   },
   webpack: (config, { isServer }) => {
     if (isServer) {
