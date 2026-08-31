@@ -138,6 +138,12 @@ const createStyles = () => StyleSheet.create({
     marginBottom: 10,
     lineHeight: 1.5,
   },
+  coverLetterAddress: {
+    fontSize: 8.5,
+    color: '#757574',
+    marginBottom: 10,
+    lineHeight: 1.45,
+  },
   coverLetterFooterLine: {
     fontSize: 8.5,
     color: '#757574',
@@ -918,6 +924,9 @@ async function generatePDFBuffer(
         React.createElement(View, { style: styles.coverLetterClosingBlock },
           React.createElement(Text, { style: styles.coverLetterClosing }, "Thanking you,"),
           React.createElement(Text, { style: styles.coverLetterSignatory }, "RSM UAE"),
+          React.createElement(Text, { style: styles.coverLetterAddress },
+            "RSM Dahman Management Consultancy LLC\nDubai: Offices 3109-3110, The Burlington Tower, Business Bay, Dubai, UAE"
+          ),
           React.createElement(Text, { style: styles.coverLetterFooterBold }, "THE POWER OF BEING UNDERSTOOD"),
           React.createElement(Text, { style: styles.coverLetterFooterBold }, "AUDIT | TAX | CONSULTING")
         )
