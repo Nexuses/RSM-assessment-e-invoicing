@@ -369,6 +369,13 @@ const createStyles = () => StyleSheet.create({
     textAlign: 'left',
     lineHeight: 1.3,
   },
+  footerAddress: {
+    fontSize: 8.5,
+    color: '#ffffff',
+    textAlign: 'left',
+    lineHeight: 1.3,
+    marginBottom: 6,
+  },
   footerDescription: {
     fontSize: 8,
     color: '#ffffff',
@@ -525,6 +532,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const createFooter = () => React.createElement(View, { style: styles.letterheadFooter },
         React.createElement(View, { style: styles.footerContent },
           React.createElement(View, { style: styles.footerLeft },
+            React.createElement(Text, { style: styles.footerAddress },
+              "RSM Dahman Management Consultancy LLC\nDubai: Offices 3109-3110, The Burlington Tower, Business Bay, Dubai, UAE"
+            ),
             React.createElement(Text, { style: styles.footerText }, "© 2026 RSM. All rights reserved."),
             React.createElement(Text, { style: styles.footerDescription }, "RSM is a powerful network of assurance, tax and consulting experts with offices all over the world.")
           ),
