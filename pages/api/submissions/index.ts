@@ -19,14 +19,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(401).json({ message: "Unauthorized." });
   }
 
-  const [assessments, consultations] = await Promise.all([
-    db.assessmentSubmission.findMany({
-      orderBy: { createdAt: "desc" },
-    }),
-    db.consultationRequest.findMany({
-      orderBy: { createdAt: "desc" },
-    }),
-  ]);
+  const assessments = await db.assessmentSubmission.findMany({
+    orderBy: { createdAt: "desc" },
+  });
 
   return res.status(200).json({
     assessments: assessments.map((item) => {
@@ -37,6 +32,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         formattedAnswers: formatSubmissionAnswers(answers),
       };
     }),
-    consultations,
   });
 }
