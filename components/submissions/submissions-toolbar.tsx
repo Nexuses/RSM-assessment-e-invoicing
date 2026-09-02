@@ -4,6 +4,7 @@ import { ChevronDown, Filter, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { SubmissionsPageHeader } from "@/components/submissions/submissions-page-header";
 import {
   DEFAULT_FILTER_STATE,
   MONTH_LABELS,
@@ -102,12 +103,10 @@ export function SubmissionsToolbar({
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-3xl font-semibold text-[#1b3a57]">Submissions</h1>
-        <p className="mt-1 text-sm text-slate-600">
-          View all received assessment submissions.
-        </p>
-      </div>
+      <SubmissionsPageHeader
+        title="Submissions"
+        subtitle="View all received assessment submissions."
+      />
 
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex flex-1 flex-wrap items-center gap-2">

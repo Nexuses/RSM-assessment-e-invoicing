@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { AttachmentViewer } from "@/components/submissions/attachment-viewer";
@@ -11,6 +11,7 @@ import {
   DEFAULT_FILTER_STATE,
   SubmissionsToolbar,
 } from "@/components/submissions/submissions-toolbar";
+import { SubmissionsPageHeader } from "@/components/submissions/submissions-page-header";
 import { getSubmissionAttachments } from "@/lib/submission-attachments";
 import {
   filterAssessments,
@@ -207,11 +208,12 @@ export function SubmissionsDashboard({ isConfigured, initialAuthenticated }: Pro
   if (!isConfigured) {
     return (
       <Card className="border-[#009CD9]/20 shadow-lg">
-        <CardHeader>
-          <CardTitle className="text-2xl text-[#1b3a57]">Submissions</CardTitle>
-          <CardDescription>
-            Set `SUBMISSIONS_PASSWORD` in your environment before using this page.
-          </CardDescription>
+        <CardHeader className="space-y-4">
+          <SubmissionsPageHeader
+            title="Submissions"
+            subtitle="Set `SUBMISSIONS_PASSWORD` in your environment before using this page."
+            size="compact"
+          />
         </CardHeader>
       </Card>
     );
@@ -221,11 +223,12 @@ export function SubmissionsDashboard({ isConfigured, initialAuthenticated }: Pro
     return (
       <div className="mx-auto max-w-md">
         <Card className="border-[#009CD9]/20 shadow-lg">
-          <CardHeader className="space-y-2">
-            <CardTitle className="text-2xl text-[#1b3a57]">Submissions Login</CardTitle>
-            <CardDescription>
-              Enter the shared admin password to view received submissions.
-            </CardDescription>
+          <CardHeader className="space-y-4">
+            <SubmissionsPageHeader
+              title="Submissions Login"
+              subtitle="Enter the shared admin password to view received submissions."
+              size="compact"
+            />
           </CardHeader>
           <CardContent>
             <form className="space-y-4" onSubmit={handleLogin}>
