@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import {
   Card,
   CardContent,
@@ -102,6 +102,13 @@ export function CybersecurityAssessmentForm() {
   const [assessment, setAssessment] = useState<AssessmentResult | null>(null);
   const [animatedScore, setAnimatedScore] = useState(0); // animates TOTAL score percentage (for UI only)
   const [formErrors, setFormErrors] = useState<string[]>([]);
+  const [submitStatus, setSubmitStatus] = useState<"idle" | "submitting" | "success" | "error">("idle");
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [draftId, setDraftId] = useState<string | null>(null);
+  const draftIdRef = useRef<string | null>(null);
+  const progressSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingSubmitAnswers = useRef<Record<string, string> | null>(null);
+  const submitInFlightRef = useRef(false);
   const [questions] = useState<Question[]>(questionsData);
   // Filter out q5 (VAT question) from questions array since it's shown separately
   const [assessmentQuestions] = useState<Question[]>(questionsData.filter(q => q.id !== 'q5'));
@@ -120,6 +127,172 @@ export function CybersecurityAssessmentForm() {
       setCurrentQuestion(visibleQuestions.length);
     }
   }, [visibleQuestions.length, currentQuestion]);
+
+  useEffect(() => {
+    draftIdRef.current = draftId;
+  }, [draftId]);
+
+  useEffect(() => {
+    return () => {
+      if (progressSaveTimer.current) {
+        clearTimeout(progressSaveTimer.current);
+      }
+    };
+  }, []);
+
+  const createAssessmentDraft = useCallback(async (info: {
+    name: string;
+    email: string;
+    company: string;
+    position: string;
+    phone: string;
+    website: string;
+  }) => {
+    try {
+      const response = await fetch("/api/assessment-progress", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ personalInfo: info }),
+      });
+      if (!response.ok) {
+        console.error("Failed to create assessment draft:", await response.text());
+        return;
+      }
+      const data = await response.json();
+      if (data.draftId) {
+        setDraftId(data.draftId);
+        draftIdRef.current = data.draftId;
+      }
+    } catch (error) {
+      console.error("Failed to create assessment draft:", error);
+    }
+  }, []);
+
+  const patchAssessmentProgress = useCallback(
+    (
+      payload: {
+        answers?: Record<string, string>;
+        currentQuestion?: number;
+        status?: "in_progress" | "completed" | "out_of_scope";
+      },
+      immediate = false,
+    ) => {
+      const id = draftIdRef.current;
+      if (!id) return;
+
+      const run = async () => {
+        try {
+          await fetch("/api/assessment-progress", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ draftId: id, ...payload }),
+          });
+        } catch (error) {
+          console.error("Failed to update assessment draft:", error);
+        }
+      };
+
+      if (immediate) {
+        if (progressSaveTimer.current) {
+          clearTimeout(progressSaveTimer.current);
+          progressSaveTimer.current = null;
+        }
+        void run();
+        return;
+      }
+
+      if (progressSaveTimer.current) {
+        clearTimeout(progressSaveTimer.current);
+      }
+      progressSaveTimer.current = setTimeout(() => {
+        progressSaveTimer.current = null;
+        void run();
+      }, 1500);
+    },
+    [],
+  );
+
+  const submitAssessmentResults = useCallback(
+    async (finalAnswers: Record<string, string>) => {
+      if (submitInFlightRef.current) return;
+      submitInFlightRef.current = true;
+
+      const result = computeAssessment(finalAnswers);
+      pendingSubmitAnswers.current = finalAnswers;
+      setSubmitStatus("submitting");
+      setSubmitError(null);
+      setFormErrors([]);
+
+      const assessmentData = {
+        personalInfo: {
+          name: personalInfo.name,
+          email: personalInfo.email,
+          company: personalInfo.company,
+          position: personalInfo.position,
+          phone: personalInfo.phone,
+          website: personalInfo.website,
+        },
+        answers: finalAnswers,
+        score: result.totalScore,
+        assessment: result,
+        draftId: draftIdRef.current || undefined,
+      };
+
+      try {
+        const response = await fetch("/api/send-assessment", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(assessmentData),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(
+            errorData.message || "Failed to send assessment results",
+          );
+        }
+
+        await response.json();
+        setAssessment(result);
+        setSubmitStatus("success");
+        setAnimatedScore(0);
+
+        const maxTotal = result.maxUrgencyScore + result.maxComplexityScore;
+        const percentageScore =
+          maxTotal > 0 ? Math.round((result.totalScore / maxTotal) * 100) : 0;
+        const animationDuration = 1000;
+        const frameDuration = 1000 / 60;
+        const totalFrames = Math.round(animationDuration / frameDuration);
+        let frame = 0;
+        const animate = () => {
+          const progress = frame / totalFrames;
+          setAnimatedScore(Math.floor(progress * percentageScore));
+          if (frame < totalFrames) {
+            frame++;
+            requestAnimationFrame(animate);
+          }
+        };
+        requestAnimationFrame(animate);
+      } catch (error) {
+        console.error("Error sending assessment results:", error);
+        submitInFlightRef.current = false;
+        setSubmitStatus("error");
+        setSubmitError(
+          error instanceof Error
+            ? error.message
+            : "We couldn’t save your assessment. Please try again.",
+        );
+        setFormErrors([
+          error instanceof Error && error.message
+            ? error.message
+            : "We couldn’t save your assessment. Please try again.",
+        ]);
+      }
+    },
+    [personalInfo],
+  );
   const [isConsultationModalOpen, setIsConsultationModalOpen] = useState(false);
   const [isSubmittingConsultation, setIsSubmittingConsultation] = useState(false);
   const [consultationSuccess, setConsultationSuccess] = useState(false);
@@ -224,6 +397,7 @@ export function CybersecurityAssessmentForm() {
   const handlePersonalInfoSubmit = (values: z.infer<typeof formSchema>) => {
     setPersonalInfo(values);
     setShowVatQuestion(true); // Show VAT question after personal info
+    void createAssessmentDraft(values);
   };
 
   const handleVatAnswer = (value: string) => {
@@ -232,8 +406,13 @@ export function CybersecurityAssessmentForm() {
     if (value === '0') {
       // Not registered for VAT - show out of scope thank you page
       setIsOutOfScope(true);
+      patchAssessmentProgress(
+        { answers: updatedAnswers, currentQuestion: 0, status: "out_of_scope" },
+        true,
+      );
     } else {
       // Registered for VAT - proceed to assessment questions
+      patchAssessmentProgress({ answers: updatedAnswers, currentQuestion: 1 });
       // Auto-advance after a short delay for better UX
       setTimeout(() => {
         setShowVatQuestion(false);
@@ -263,6 +442,10 @@ export function CybersecurityAssessmentForm() {
     }
 
     setAnswers(updatedAnswers);
+    patchAssessmentProgress({
+      answers: updatedAnswers,
+      currentQuestion,
+    });
     
     // Get current question to check response type
     const currentQ = visibleQuestions[currentQuestion - 1];
@@ -273,10 +456,15 @@ export function CybersecurityAssessmentForm() {
       setTimeout(() => {
         if (currentQuestion < TOTAL_QUESTIONS) {
           setFormErrors([]);
-          setCurrentQuestion(currentQuestion + 1);
+          const nextQuestion = currentQuestion + 1;
+          setCurrentQuestion(nextQuestion);
+          patchAssessmentProgress({
+            answers: updatedAnswers,
+            currentQuestion: nextQuestion,
+          });
         } else if (currentQuestion === TOTAL_QUESTIONS) {
           // If this is the last question, calculate score with updated answers
-          calculateScoreWithAnswers(updatedAnswers);
+          void submitAssessmentResults(updatedAnswers);
         }
       }, 300); // Small delay to allow UI to update
     }
@@ -284,69 +472,11 @@ export function CybersecurityAssessmentForm() {
   };
 
   const calculateScoreWithAnswers = async (finalAnswers: Record<string, string>) => {
-    const result = computeAssessment(finalAnswers);
-    setAssessment(result);
-    setAnimatedScore(0);
-
-    const maxTotal = result.maxUrgencyScore + result.maxComplexityScore;
-    const percentageScore = maxTotal > 0 ? Math.round((result.totalScore / maxTotal) * 100) : 0;
-
-    // Animate the score
-    const animationDuration = 1000; // 1 second
-    const frameDuration = 1000 / 60; // 60 fps
-    const totalFrames = Math.round(animationDuration / frameDuration);
-    let frame = 0;
-    const animate = () => {
-      const progress = frame / totalFrames;
-      setAnimatedScore(Math.floor(progress * percentageScore));
-      if (frame < totalFrames) {
-        frame++;
-        requestAnimationFrame(animate);
-      }
-    };
-    requestAnimationFrame(animate);
-
-    // Prepare the data to be sent via API
-    const assessmentData = {
-      personalInfo: {
-        name: personalInfo.name,
-        email: personalInfo.email,
-        company: personalInfo.company,
-        position: personalInfo.position,
-        phone: personalInfo.phone,
-        website: personalInfo.website,
-      },
-      answers: finalAnswers,
-      // keep legacy 'score' but send full computed result as well
-      score: result.totalScore,
-      assessment: result,
-    };
-
-    // Send the data to the server
-    try {
-      const response = await fetch("/api/send-assessment", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(assessmentData),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(
-          errorData.message || "Failed to send assessment results"
-        );
-      }
-
-      const data = await response.json();
-      console.log("Assessment results sent successfully:", data);
-    } catch (error) {
-      console.error("Error sending assessment results:", error);
-    }
+    await submitAssessmentResults(finalAnswers);
   };
 
   const handleNext = () => {
+    if (submitStatus === "submitting") return;
     if (currentQuestion === 0) {
       form.handleSubmit(handlePersonalInfoSubmit)();
     } else if (currentQuestion < TOTAL_QUESTIONS) {
@@ -449,7 +579,12 @@ export function CybersecurityAssessmentForm() {
       }
       
       setFormErrors([]);
-      setCurrentQuestion(currentQuestion + 1);
+      const nextQuestion = currentQuestion + 1;
+      setCurrentQuestion(nextQuestion);
+      patchAssessmentProgress({
+        answers,
+        currentQuestion: nextQuestion,
+      });
     } else {
       // This is the last question - ensure the answer is saved before calculating score
       const currentQ = visibleQuestions[currentQuestion - 1];
@@ -568,66 +703,12 @@ export function CybersecurityAssessmentForm() {
         finalAnswers[currentQ.id] = lastAnswer;
       }
     }
-    
-    const result = computeAssessment(finalAnswers);
-    setAssessment(result);
-    setAnimatedScore(0);
 
-    const maxTotal = result.maxUrgencyScore + result.maxComplexityScore;
-    const percentageScore = maxTotal > 0 ? Math.round((result.totalScore / maxTotal) * 100) : 0;
-
-    // Animate the score
-    const animationDuration = 1000; // 1 second
-    const frameDuration = 1000 / 60; // 60 fps
-    const totalFrames = Math.round(animationDuration / frameDuration);
-    let frame = 0;
-    const animate = () => {
-      const progress = frame / totalFrames;
-      setAnimatedScore(Math.floor(progress * percentageScore));
-      if (frame < totalFrames) {
-        frame++;
-        requestAnimationFrame(animate);
-      }
-    };
-    requestAnimationFrame(animate);
-
-    // Prepare the data to be sent via API
-    const assessmentData = {
-      personalInfo: {
-        name: personalInfo.name,
-        email: personalInfo.email,
-        company: personalInfo.company,
-        position: personalInfo.position,
-        phone: personalInfo.phone,
-        website: personalInfo.website,
-      },
-      answers: finalAnswers,
-      score: result.totalScore,
-      assessment: result,
-    };
-
-    // Send the data to the server
-    try {
-      const response = await fetch("/api/send-assessment", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(assessmentData),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(
-          errorData.message || "Failed to send assessment results"
-        );
-      }
-
-      const data = await response.json();
-      console.log("Assessment results sent successfully:", data);
-    } catch (error) {
-      console.error("Error sending assessment results:", error);
-    }
+    patchAssessmentProgress(
+      { answers: finalAnswers, currentQuestion },
+      true,
+    );
+    await submitAssessmentResults(finalAnswers);
   };
 
   const progress = ((currentQuestion + 1) / (TOTAL_QUESTIONS + 1)) * 100;
@@ -1925,13 +2006,26 @@ export function CybersecurityAssessmentForm() {
                             {formErrors.map((error, index) => (
                               <p key={index}>{error}</p>
                             ))}
+                            {submitStatus === "error" && (
+                              <Button
+                                type="button"
+                                onClick={() => {
+                                  const payload =
+                                    pendingSubmitAnswers.current || answers;
+                                  void submitAssessmentResults(payload);
+                                }}
+                                className="mt-3 h-9 rounded-full bg-[#00AEEF] px-4 text-sm font-semibold text-white hover:bg-[#0091cf]"
+                              >
+                                Retry submit
+                              </Button>
+                            )}
                           </motion.div>
                         )}
                     </CardContent>
                 <CardFooter className="flex flex-col gap-3 px-6 pb-6 sm:flex-row sm:justify-between">
                       <Button
                         onClick={handleBack}
-                        disabled={currentQuestion === 1}
+                        disabled={currentQuestion === 1 || submitStatus === "submitting"}
                     className="h-11 w-full rounded-full border border-gray-200 bg-white text-sm font-semibold text-[#1b3a57] transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50 sm:w-[200px]"
                       >
                     <ChevronLeft className="mr-2 h-4 w-4" />
@@ -1939,10 +2033,17 @@ export function CybersecurityAssessmentForm() {
                       </Button>
                       <Button
                         onClick={handleNext}
-                    className="h-11 w-full rounded-full bg-[#00AEEF] text-sm font-semibold text-white shadow-lg shadow-[#00AEEF]/30 transition-colors hover:bg-[#0091cf] sm:w-[220px]"
+                        disabled={submitStatus === "submitting"}
+                    className="h-11 w-full rounded-full bg-[#00AEEF] text-sm font-semibold text-white shadow-lg shadow-[#00AEEF]/30 transition-colors hover:bg-[#0091cf] disabled:cursor-not-allowed disabled:opacity-70 sm:w-[220px]"
                   >
-                    {currentQuestion === TOTAL_QUESTIONS ? "Finish" : "Next"}
-                    <ChevronRight className="ml-2 h-4 w-4" />
+                    {submitStatus === "submitting"
+                      ? "Saving…"
+                      : currentQuestion === TOTAL_QUESTIONS
+                        ? "Finish"
+                        : "Next"}
+                    {submitStatus !== "submitting" && (
+                      <ChevronRight className="ml-2 h-4 w-4" />
+                    )}
                       </Button>
                     </CardFooter>
                   </Card>
