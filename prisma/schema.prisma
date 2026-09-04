@@ -26,6 +26,26 @@ model AssessmentSubmission {
   pdfS3Url           String?
 }
 
+model AssessmentDraft {
+  id              String    @id @default(cuid())
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  startedAt       DateTime  @default(now())
+  name            String
+  email           String
+  company         String
+  position        String
+  phone           String?
+  website         String?
+  answers         Json      @default("{}")
+  currentQuestion Int       @default(0)
+  status          String // in_progress | completed | out_of_scope
+  reminderSentAt  DateTime?
+
+  @@index([status, startedAt])
+  @@index([email, status])
+}
+
 model ConsultationRequest {
   id        String   @id @default(cuid())
   createdAt DateTime @default(now())

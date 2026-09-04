@@ -12,6 +12,7 @@ import { formatSelectCountriesDisplay } from '@/lib/select-countries';
 import { google } from 'googleapis';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { db } from '@/lib/db';
+import { markDraftCompleted } from '@/lib/assessment-drafts';
 
 // Define the structure of the request body
 interface AssessmentData {
@@ -26,6 +27,7 @@ interface AssessmentData {
   answers: Record<string, string>;
   score?: number;
   assessment?: any;
+  draftId?: string;
 }
 
 interface PersonalInfo {
@@ -1633,7 +1635,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ message: 'Method Not Allowed' })
   }
 
-  const { personalInfo, answers } = req.body as AssessmentData
+  const { personalInfo, answers, draftId } = req.body as AssessmentData
   const assessment = computeAssessment(answers);
   const currentQuestions = questionsData;
 
@@ -1796,6 +1798,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       try {
         submission = await createAssessmentSubmission(personalInfo, answers);
         console.log('Assessment submission saved to Postgres');
+        try {
+          await markDraftCompleted(draftId, personalInfo.email);
+        } catch (draftError) {
+          console.error('Failed to mark assessment draft completed:', draftError);
+        }
       } catch (dbError) {
         console.error('Failed to save assessment to Postgres:', dbError);
       }
@@ -1871,6 +1878,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // If email is not configured, return success (Google Sheets already wrote)
     if (!emailConfigured) {
       console.log('Assessment processing completed (Google Sheets only, email skipped)');
+      if (process.env.DATABASE_URL) {
+        try {
+          await markDraftCompleted(draftId, personalInfo.email);
+        } catch (draftError) {
+          console.error('Failed to mark assessment draft completed:', draftError);
+        }
+      }
       return res.status(200).json({ 
         message: 'Assessment results saved successfully',
         emailSent: false,
@@ -2095,6 +2109,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Google Sheets write already happened above (before email processing)
 
     console.log('Assessment processing completed successfully');
+    if (process.env.DATABASE_URL) {
+      try {
+        await markDraftCompleted(draftId, personalInfo.email);
+      } catch (draftError) {
+        console.error('Failed to mark assessment draft completed:', draftError);
+      }
+    }
     res.status(200).json({ 
       message: 'Assessment results sent successfully',
       emailSent: userEmailSent,

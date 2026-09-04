@@ -131,9 +131,13 @@ Fill every required key:
 | `GOOGLE_SHEETS_SPREADSHEET_ID`                                                       | Spreadsheet ID (Sheet1 = assessments, Sheet2 = consultations) |
 | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` / `AWS_S3_BUCKET_NAME` / `AWS_REGION`  | PDF uploads                                                   |
 | `FROM_EMAIL` / `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` / `SMTP_SECURE` | Outbound email                                                |
+| `NEXT_PUBLIC_APP_URL`                                                                | Public site URL used in incomplete-assessment resume emails   |
+| `CRON_SECRET`                                                                        | Bearer secret for `/api/cron/incomplete-assessments`          |
 
 
 Optional: `CONSULTATION_RECIPIENTS` (comma-separated admin emails).
+
+Incomplete assessments: after personal info is saved, drafts sit in Postgres. The PM2 app `rsm-e-invoicing-incomplete-cron` runs every 5 minutes and emails the taker + `INTERNAL_ASSESSMENT_RECIPIENTS` when a draft is still `in_progress` after 30 minutes. Ensure `CRON_SECRET` is set in `.env` (PM2 inherits env for the cron script via the shell/ecosystem; export it in `.env` and load with your process manager, or set `CRON_SECRET` under the cron app `env` in `ecosystem.config.cjs`).
 
 Confirm the Google service account email still has **Editor** access on that spreadsheet.
 
