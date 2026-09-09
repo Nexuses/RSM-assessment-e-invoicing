@@ -81,7 +81,7 @@ export const questionsData: Question[] = [
   },
   {
     id: 'q5',
-    text: 'Are you currently registered for VAT in the UAE?',
+    text: 'Do you have a financial transaction in the UAE (B2B or B2G)?',
     subject: 'Part 1: Mandate Applicability',
     responseType: 'yesno',
     options: [

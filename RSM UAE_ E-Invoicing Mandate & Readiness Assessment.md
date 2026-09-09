@@ -69,7 +69,7 @@ Assessment Provider: RSM UAE
 * **Exempt Sectors:** May have complex partial exemptions. **(Points: 1\)**  
 * **General Trading:** Standard compliance rules apply. **(Points: 3\)**
 
-**5\. Are you currently registered for VAT in the UAE?**
+**5\. Do you have a financial transaction in the UAE (B2B or B2G)?**
 
 * \[ \] Yes  
 * \[ \] No
