@@ -115,13 +115,26 @@ const parseCsv = (value?: string): string[] =>
     .map((v) => v.trim())
     .filter(Boolean);
 
+const parseVolumeBandValue = (raw?: string): string | undefined => {
+  if (!raw) return undefined;
+  try {
+    const parsed = JSON.parse(raw) as { value?: string };
+    if (typeof parsed.value === 'string' && parsed.value.trim()) {
+      return parsed.value.trim();
+    }
+  } catch {
+    // plain band value
+  }
+  return raw.trim() || undefined;
+};
+
 export function computeAssessment(answers: Record<string, string>): AssessmentResult {
-  const vatRegistered = answers.q5 === '1';
-  if (!vatRegistered) {
+  const hasBusinessTransactions = answers.q5 === '1';
+  if (!hasBusinessTransactions) {
     return {
       eligible: false,
       ineligibleReason:
-        'Not registered for VAT in the UAE. Per the assessment logic, this disqualifies the entity from the e-invoicing mandate scope for scoring purposes.',
+        'Based on your response, you may currently be outside the scope of the UAE e-Invoicing requirements. The business does not currently conduct Business Transactions in the UAE (B2B or B2G).',
       phaseRecommendation: getPhaseFromTurnover(answers),
       urgency: { score: 0, category: 'Out of scope', recommendation: 'No scoring applied.' },
       complexity: { score: 0, category: 'N/A', recommendation: 'No scoring applied.' },
@@ -180,6 +193,7 @@ export function computeAssessment(answers: Record<string, string>): AssessmentRe
   // Axis B (Complexity): Q6 - Q16
   const volumeBandScore = (value?: string) => {
     switch (value) {
+      case '0_1k':
       case '1_3k':
         return 1;
       case '3_5k':
@@ -187,14 +201,16 @@ export function computeAssessment(answers: Record<string, string>): AssessmentRe
       case '5_7k':
         return 5;
       case '7_10k':
+      case 'above_10k':
         return 10;
+      case 'other':
       default:
         return 0;
     }
   };
 
-  const q6Inbound = volumeBandScore(answers.q6_inbound);
-  const q6 = volumeBandScore(answers.q6);
+  const q6Inbound = volumeBandScore(parseVolumeBandValue(answers.q6_inbound));
+  const q6 = volumeBandScore(parseVolumeBandValue(answers.q6));
 
   const q7 = (() => {
     switch (answers.q7) {
