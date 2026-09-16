@@ -29,10 +29,13 @@ export type Question = {
   detailsKind?: 'countries' | 'branches';
 };
 
-const invoiceVolumeOptions = INVOICE_VOLUME_BAND_OPTIONS.map((option) => ({
-  value: option.value,
-  label: option.label,
-}));
+const invoiceVolumeOptions = [
+  ...INVOICE_VOLUME_BAND_OPTIONS.map((option) => ({
+    value: option.value,
+    label: option.label,
+  })),
+  { value: 'other', label: 'Others' },
+];
 
 export const questionsData: Question[] = [
   {
@@ -81,7 +84,7 @@ export const questionsData: Question[] = [
   },
   {
     id: 'q5',
-    text: 'Do you have a financial transaction in the UAE (B2B or B2G)?',
+    text: 'Do you conduct Business Transactions in the UAE with other businesses or Government Entities (e.g. B2B or B2G transactions)?',
     subject: 'Part 1: Mandate Applicability',
     responseType: 'yesno',
     options: [
@@ -93,15 +96,17 @@ export const questionsData: Question[] = [
     id: 'q6_inbound',
     text: 'What is your estimated annual volume of Purchasing order excluding imports (Inbound)?',
     subject: 'Part 2: Volume & Scope',
-    responseType: 'select',
+    responseType: 'select_other',
     options: invoiceVolumeOptions,
+    placeholder: 'Enter your annual invoice volume',
   },
   {
     id: 'q6',
     text: 'What is your estimated annual volume of Sales Invoices (Outbound)?',
     subject: 'Part 2: Volume & Scope',
-    responseType: 'select',
+    responseType: 'select_other',
     options: invoiceVolumeOptions,
+    placeholder: 'Enter your annual invoice volume',
   },
   {
     id: 'q9',
@@ -145,7 +150,7 @@ export const questionsData: Question[] = [
     id: 'q10',
     text: 'Which ERP or Accounting Software do you currently use?',
     subject: 'Part 3: Technical Readiness',
-    responseType: 'select_other',
+    responseType: 'select',
     options: [
       { value: 'tier1', label: 'SAP / Oracle / Microsoft Dynamics' },
       { value: 'tier2', label: 'Sage / Zoho / QuickBooks / Xero' },
@@ -153,7 +158,13 @@ export const questionsData: Question[] = [
       { value: 'manual', label: 'Manual: Excel / Word' },
       { value: 'other', label: 'Other' },
     ],
-    placeholder: 'Specify ERP or accounting software',
+  },
+  {
+    id: 'q10_erp_detail',
+    text: 'Please specify your ERP/accounting software name, version, and whether it supports APIs',
+    subject: 'Part 3: Technical Readiness',
+    responseType: 'text',
+    placeholder: 'e.g. SAP S/4HANA 2023, API supported',
   },
   {
     id: 'q11',

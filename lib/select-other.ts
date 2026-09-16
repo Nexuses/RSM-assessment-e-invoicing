@@ -47,7 +47,9 @@ export function formatSelectOtherDisplay(
   if (!parsed) return value || 'Not answered';
   if (parsed.value === 'other') {
     const text = parsed.other?.trim();
-    return text ? `Other — ${text}` : 'Other';
+    const otherLabel =
+      options?.find((opt) => opt.value === 'other')?.label ?? 'Other';
+    return text ? `${otherLabel} — ${text}` : otherLabel;
   }
   const option = options?.find((opt) => opt.value === parsed.value);
   return option?.label ?? parsed.value;

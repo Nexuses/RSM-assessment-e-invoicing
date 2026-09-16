@@ -48,7 +48,7 @@ import {
   stringifyEntities,
   FTA_PILOT_OPTIONS,
   TURNOVER_BAND_OPTIONS,
-  INVOICE_VOLUME_BAND_OPTIONS,
+  ENTITY_INVOICE_VOLUME_BAND_OPTIONS,
   validateEntities,
   type EntityRecord,
 } from "@/lib/entities";
@@ -110,15 +110,19 @@ export function CybersecurityAssessmentForm() {
   const pendingSubmitAnswers = useRef<Record<string, string> | null>(null);
   const submitInFlightRef = useRef(false);
   const [questions] = useState<Question[]>(questionsData);
-  // Filter out q5 (VAT question) from questions array since it's shown separately
+  // Filter out q5 (eligibility) from questions array since it's shown separately
   const [assessmentQuestions] = useState<Question[]>(questionsData.filter(q => q.id !== 'q5'));
   const showAspPlatformQuestion = answers.q9_8 === "require_asp_support";
+  const showEntityDetailsQuestion = answers.q7 !== "single_trn";
   const visibleQuestions = useMemo(
     () =>
-      assessmentQuestions.filter(
-        (q) => q.id !== "q9_9" || showAspPlatformQuestion,
-      ),
-    [assessmentQuestions, showAspPlatformQuestion],
+      assessmentQuestions.filter((q) => {
+        if (q.id === "q9_9" && !showAspPlatformQuestion) return false;
+        // Entity details duplicate company-level volumes for single-entity clients
+        if (q.id === "q9_entities" && !showEntityDetailsQuestion) return false;
+        return true;
+      }),
+    [assessmentQuestions, showAspPlatformQuestion, showEntityDetailsQuestion],
   );
   const TOTAL_QUESTIONS = visibleQuestions.length;
 
@@ -404,14 +408,15 @@ export function CybersecurityAssessmentForm() {
     const updatedAnswers = { ...answers, q5: value };
     setAnswers(updatedAnswers);
     if (value === '0') {
-      // Not registered for VAT - show out of scope thank you page
+      // No B2B/B2G UAE transactions — out of scope; still generate PDF + email
       setIsOutOfScope(true);
       patchAssessmentProgress(
         { answers: updatedAnswers, currentQuestion: 0, status: "out_of_scope" },
         true,
       );
+      void submitAssessmentResults(updatedAnswers);
     } else {
-      // Registered for VAT - proceed to assessment questions
+      // Eligible — proceed to assessment questions
       patchAssessmentProgress({ answers: updatedAnswers, currentQuestion: 1 });
       // Auto-advance after a short delay for better UX
       setTimeout(() => {
@@ -424,15 +429,10 @@ export function CybersecurityAssessmentForm() {
   const handleAnswerChange = (questionId: string, value: string) => {
     let updatedAnswers = { ...answers, [questionId]: value };
 
-    // Question 7 (q7): single entity only — trim entities if user changes selection
-    if (questionId === "q7" && value === "single_trn" && updatedAnswers.q9_entities) {
-      const entities = parseEntities(updatedAnswers.q9_entities);
-      if (entities && entities.length > 1) {
-        updatedAnswers = {
-          ...updatedAnswers,
-          q9_entities: stringifyEntities([entities[0]]),
-        };
-      }
+    // Question 7 (q7): single entity — drop entity details (shown only for multi-entity / tax group)
+    if (questionId === "q7" && value === "single_trn") {
+      const { q9_entities: _removedEntities, ...rest } = updatedAnswers;
+      updatedAnswers = rest;
     }
 
     // Question 12 (q9_8): ASP platform follow-up only when Require ASP support
@@ -557,7 +557,11 @@ export function CybersecurityAssessmentForm() {
           return;
         }
         if (!hasSelectOtherText(currentAnswer)) {
-          setFormErrors(['Please specify your ERP or accounting software.']);
+          setFormErrors([
+            currentQ.placeholder
+              ? `Please specify: ${currentQ.placeholder}`
+              : 'Please provide additional details for your selection.',
+          ]);
           return;
         }
       }
@@ -664,7 +668,11 @@ export function CybersecurityAssessmentForm() {
           return;
         }
         if (!hasSelectOtherText(currentAnswer)) {
-          setFormErrors(['Please specify your ERP or accounting software.']);
+          setFormErrors([
+            currentQ.placeholder
+              ? `Please specify: ${currentQ.placeholder}`
+              : 'Please provide additional details for your selection.',
+          ]);
           return;
         }
       }
@@ -807,14 +815,20 @@ export function CybersecurityAssessmentForm() {
                     className="rounded-2xl border border-[#00AEEF]/30 bg-gradient-to-r from-[#e6f5fc] to-[#d0ebf7] px-6 py-6"
                   >
                     <p className="text-lg sm:text-xl font-semibold text-[#1b3a57] mb-4 text-center">
-                      Your Business is Out of Scope
+                      Outside Scope of UAE e-Invoicing
                     </p>
                     <div className="space-y-3 text-left">
-                      <p className="text-sm sm:text-base text-gray-700 leading-relaxed">
-                        Based on your response, your business is not currently registered for VAT in the UAE. As a result, you are out of scope for the UAE E-Invoicing mandate at this time.
+                      <p className="text-sm sm:text-base font-semibold text-[#1b3a57] leading-relaxed">
+                        Based on your response, you may currently be outside the scope of the UAE e-Invoicing requirements.
                       </p>
                       <p className="text-sm sm:text-base text-gray-700 leading-relaxed">
-                        The UAE E-Invoicing mandate applies to businesses registered for VAT. If your business becomes VAT-registered in the future, you may need to comply with the e-invoicing requirements.
+                        Based on the information provided, you have indicated that your business does not currently conduct Business Transactions in the UAE.
+                      </p>
+                      <p className="text-sm sm:text-base text-gray-700 leading-relaxed">
+                        If your business activities or transaction profile changes in the future, your e-Invoicing obligations should be reassessed.
+                      </p>
+                      <p className="text-sm sm:text-base font-semibold text-[#1b3a57] leading-relaxed">
+                        If you require assistance in confirming your e-Invoicing position, please contact RSM.
                       </p>
                     </div>
                   </motion.div>
@@ -1353,7 +1367,7 @@ export function CybersecurityAssessmentForm() {
                                       className={selectClassName}
                                     >
                                       <option value="">Select...</option>
-                                      {INVOICE_VOLUME_BAND_OPTIONS.map((option) => (
+                                      {ENTITY_INVOICE_VOLUME_BAND_OPTIONS.map((option) => (
                                         <option key={option.value} value={option.value}>
                                           {option.label}
                                         </option>
@@ -1378,7 +1392,7 @@ export function CybersecurityAssessmentForm() {
                                     className={selectClassName}
                                   >
                                     <option value="">Select...</option>
-                                    {INVOICE_VOLUME_BAND_OPTIONS.map((option) => (
+                                    {ENTITY_INVOICE_VOLUME_BAND_OPTIONS.map((option) => (
                                       <option key={option.value} value={option.value}>
                                         {option.label}
                                       </option>
@@ -1794,7 +1808,7 @@ export function CybersecurityAssessmentForm() {
                                 }
                                 placeholder={
                                   currentQ.placeholder ||
-                                  'Specify ERP or accounting software'
+                                  'Please provide additional details'
                                 }
                                 className="h-12 rounded-xl border-gray-200 bg-white text-base focus-visible:ring-2 focus-visible:ring-[#00AEEF]"
                               />

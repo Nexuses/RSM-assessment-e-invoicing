@@ -23,7 +23,7 @@ export function formatAnswerValue(questionId: string, answerValue?: string): str
   }
 
   if (question.responseType === "select_other") {
-    return formatSelectOtherDisplay(answerValue || "");
+    return formatSelectOtherDisplay(answerValue || "", question.options);
   }
 
   if (question.responseType === "select_countries") {

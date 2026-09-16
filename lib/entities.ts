@@ -21,7 +21,7 @@ export const TURNOVER_BAND_OPTIONS = [
   { value: 'unknown', label: 'Not sure / To be confirmed' },
 ] as const;
 
-/** Same volume bands as inbound (q6_inbound) and sales outbound (q6) volume questions. */
+/** Volume bands for inbound (q6_inbound) and sales outbound (q6); "Others" is added in questions.ts. */
 export const INVOICE_VOLUME_BAND_OPTIONS = [
   { value: '1_3k', label: '1–3k' },
   { value: '3_5k', label: '3–5k' },
@@ -29,8 +29,18 @@ export const INVOICE_VOLUME_BAND_OPTIONS = [
   { value: '7_10k', label: '7–10k' },
 ] as const;
 
-const INVOICE_VOLUME_VALUES = new Set<string>(
-  INVOICE_VOLUME_BAND_OPTIONS.map((o) => o.value),
+/** Extended volume bands for entity details (q9_entities) dropdowns. */
+export const ENTITY_INVOICE_VOLUME_BAND_OPTIONS = [
+  { value: '0_1k', label: '0 to 1,000' },
+  { value: '1_3k', label: '1–3k' },
+  { value: '3_5k', label: '3–5k' },
+  { value: '5_7k', label: '5–7k' },
+  { value: '7_10k', label: '7–10k' },
+  { value: 'above_10k', label: 'Above 10,000' },
+] as const;
+
+const ENTITY_INVOICE_VOLUME_VALUES = new Set<string>(
+  ENTITY_INVOICE_VOLUME_BAND_OPTIONS.map((o) => o.value),
 );
 
 export function createEmptyEntity(): EntityRecord {
@@ -109,11 +119,11 @@ export function validateEntities(
     }
     if (
       requireSalesInvoicesPerYear &&
-      !INVOICE_VOLUME_VALUES.has(entity.salesInvoicesPerYear)
+      !ENTITY_INVOICE_VOLUME_VALUES.has(entity.salesInvoicesPerYear)
     ) {
       return `${label}: Please select sales invoices per year.`;
     }
-    if (!INVOICE_VOLUME_VALUES.has(entity.purchaseInvoicesPerYear)) {
+    if (!ENTITY_INVOICE_VOLUME_VALUES.has(entity.purchaseInvoicesPerYear)) {
       return `${label}: Please select purchase invoices per year.`;
     }
     if (!entity.ftaPilotAdoption) {
@@ -140,11 +150,11 @@ export function formatEntitiesDisplay(value: string): string {
         entity.ftaPilotAdoption ||
         '—';
       const salesVolume =
-        INVOICE_VOLUME_BAND_OPTIONS.find(
+        ENTITY_INVOICE_VOLUME_BAND_OPTIONS.find(
           (o) => o.value === entity.salesInvoicesPerYear,
         )?.label || entity.salesInvoicesPerYear.trim();
       const purchaseVolume =
-        INVOICE_VOLUME_BAND_OPTIONS.find(
+        ENTITY_INVOICE_VOLUME_BAND_OPTIONS.find(
           (o) => o.value === entity.purchaseInvoicesPerYear,
         )?.label || entity.purchaseInvoicesPerYear.trim();
       return [

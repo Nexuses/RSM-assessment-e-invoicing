@@ -985,10 +985,31 @@ async function generatePDFBuffer(
           React.createElement(View, { style: styles.section },
             React.createElement(Text, { style: styles.sectionTitle }, "Assessment Summary"),
             React.createElement(View, { style: [styles.summaryCard, styles.summaryCardCenter] },
-              React.createElement(Text, { style: styles.scoreLabel }, "Total Score"),
-              React.createElement(Text, { style: styles.scoreValue }, `${assessment.totalScore.toString()}`),
-              React.createElement(Text, { style: styles.resultText }, `Axis A (Urgency): ${assessment.urgency.score} / ${assessment.maxUrgencyScore} · ${assessment.urgency.category}`),
-              React.createElement(Text, { style: styles.resultText }, `Axis B (Complexity): ${assessment.complexity.score} / ${assessment.maxComplexityScore} · ${assessment.complexity.category}`)
+              ...(assessment.eligible
+                ? [
+                    React.createElement(Text, { key: "scoreLabel", style: styles.scoreLabel }, "Total Score"),
+                    React.createElement(Text, { key: "scoreValue", style: styles.scoreValue }, `${assessment.totalScore.toString()}`),
+                    React.createElement(Text, { key: "urgency", style: styles.resultText }, `Axis A (Urgency): ${assessment.urgency.score} / ${assessment.maxUrgencyScore} · ${assessment.urgency.category}`),
+                    React.createElement(Text, { key: "complexity", style: styles.resultText }, `Axis B (Complexity): ${assessment.complexity.score} / ${assessment.maxComplexityScore} · ${assessment.complexity.category}`),
+                  ]
+                : [
+                    React.createElement(Text, { key: "oosTitle", style: styles.scoreLabel }, "Outside Scope of UAE e-Invoicing"),
+                    React.createElement(Text, { key: "oos1", style: [styles.resultText, { fontFamily: "Helvetica-Bold" }] },
+                      "Based on your response, you may currently be outside the scope of the UAE e-Invoicing requirements."
+                    ),
+                    React.createElement(Text, { key: "oos2", style: styles.resultText },
+                      "Based on the information provided, you have indicated that your business does not currently conduct Business Transactions in the UAE."
+                    ),
+                    React.createElement(Text, { key: "oos3", style: styles.resultText },
+                      "If your business activities or transaction profile changes in the future, your e-Invoicing obligations should be reassessed."
+                    ),
+                    React.createElement(Text, { key: "oos4", style: [styles.resultText, { fontFamily: "Helvetica-Bold" }] },
+                      "If you require assistance in confirming your e-Invoicing position, please contact RSM."
+                    ),
+                    React.createElement(Text, { key: "oosCategory", style: styles.resultText },
+                      `Status: ${assessment.urgency.category}`
+                    ),
+                  ])
             )
           )
         )
@@ -1474,9 +1495,11 @@ async function writeToGoogleSheets(
       addAlias(q.text || "", displayValue);
       addAlias(`Q${qNum} - ${q.text || ""}`, displayValue);
 
-      // Helpful extra synonyms for the VAT eligibility question (if present)
+      // Helpful extra synonyms for the eligibility question (if present)
       if (q.id.toLowerCase() === "q5") {
-        addAlias("VAT Registered", displayValue);
+        addAlias("Business Transactions UAE", displayValue);
+        addAlias("Eligibility", displayValue);
+        addAlias("VAT Registered", displayValue); // legacy sheet headers
         addAlias("VAT registration", displayValue);
       }
     });

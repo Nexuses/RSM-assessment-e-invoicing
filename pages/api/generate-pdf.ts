@@ -599,19 +599,40 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             React.createElement(View, { style: styles.section },
               React.createElement(Text, { style: styles.sectionTitle }, "Assessment Results"),
               React.createElement(View, { style: styles.scoreContainer },
-                React.createElement(Text, { style: styles.scoreLabel }, "Total Score"),
-                React.createElement(Text, { style: styles.scoreValue }, assessment.totalScore.toString()),
-                React.createElement(View, { style: styles.percentageContainer },
-                  React.createElement(Text, { style: styles.percentageLabel }, "Axis A (Urgency)"),
-                  React.createElement(Text, { style: styles.percentageValue }, `${assessment.urgency.score} / ${assessment.maxUrgencyScore}`),
-                ),
-                React.createElement(View, { style: styles.percentageContainer },
-                  React.createElement(Text, { style: styles.percentageLabel }, "Axis B (Complexity)"),
-                  React.createElement(Text, { style: styles.percentageValue }, `${assessment.complexity.score} / ${assessment.maxComplexityScore}`),
-                ),
-                React.createElement(View, { style: styles.gaugeContainer },
-                  React.createElement(Text, { style: styles.resultText }, `Urgency: ${assessment.urgency.category} · Complexity: ${assessment.complexity.category}`)
-                )
+                ...(assessment.eligible
+                  ? [
+                      React.createElement(Text, { key: "scoreLabel", style: styles.scoreLabel }, "Total Score"),
+                      React.createElement(Text, { key: "scoreValue", style: styles.scoreValue }, assessment.totalScore.toString()),
+                      React.createElement(View, { key: "urgency", style: styles.percentageContainer },
+                        React.createElement(Text, { style: styles.percentageLabel }, "Axis A (Urgency)"),
+                        React.createElement(Text, { style: styles.percentageValue }, `${assessment.urgency.score} / ${assessment.maxUrgencyScore}`),
+                      ),
+                      React.createElement(View, { key: "complexity", style: styles.percentageContainer },
+                        React.createElement(Text, { style: styles.percentageLabel }, "Axis B (Complexity)"),
+                        React.createElement(Text, { style: styles.percentageValue }, `${assessment.complexity.score} / ${assessment.maxComplexityScore}`),
+                      ),
+                      React.createElement(View, { key: "gauge", style: styles.gaugeContainer },
+                        React.createElement(Text, { style: styles.resultText }, `Urgency: ${assessment.urgency.category} · Complexity: ${assessment.complexity.category}`)
+                      ),
+                    ]
+                  : [
+                      React.createElement(Text, { key: "oosTitle", style: styles.scoreLabel }, "Outside Scope of UAE e-Invoicing"),
+                      React.createElement(Text, { key: "oos1", style: [styles.resultText, { fontFamily: "Helvetica-Bold" }] },
+                        "Based on your response, you may currently be outside the scope of the UAE e-Invoicing requirements."
+                      ),
+                      React.createElement(Text, { key: "oos2", style: styles.resultText },
+                        "Based on the information provided, you have indicated that your business does not currently conduct Business Transactions in the UAE."
+                      ),
+                      React.createElement(Text, { key: "oos3", style: styles.resultText },
+                        "If your business activities or transaction profile changes in the future, your e-Invoicing obligations should be reassessed."
+                      ),
+                      React.createElement(Text, { key: "oos4", style: [styles.resultText, { fontFamily: "Helvetica-Bold" }] },
+                        "If you require assistance in confirming your e-Invoicing position, please contact RSM."
+                      ),
+                      React.createElement(View, { key: "oosStatus", style: styles.gaugeContainer },
+                        React.createElement(Text, { style: styles.resultText }, `Status: ${assessment.urgency.category}`)
+                      ),
+                    ])
               )
             ),
 
