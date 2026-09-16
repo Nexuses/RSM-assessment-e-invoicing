@@ -11,10 +11,8 @@ const CybersecurityAssessmentForm = dynamic(
 
 export default function Page() {
   return (
-    <main className="container mx-auto px-4 pb-8">
+    <main className="overflow-x-hidden">
       <CybersecurityAssessmentForm />
-       {/* Bottom Right Image - Visible when scrolling to bottom */}
-     
     </main>
   );
 }

@@ -774,8 +774,8 @@ export function CybersecurityAssessmentForm() {
   // Show out of scope thank you page
   if (isOutOfScope) {
     return (
-      <div className="min-h-screen relative">
-        <section className="relative left-1/2 right-1/2 w-screen -translate-x-1/2">
+      <div className="min-h-screen relative overflow-x-hidden">
+        <section className="relative w-full">
           <Image
             src="https://22527425.fs1.hubspotusercontent-na2.net/hubfs/22527425/RSM/Frame%201171276000.png"
             alt="RSM Header"
@@ -867,8 +867,8 @@ export function CybersecurityAssessmentForm() {
     const vatAnswer = answers.q5 || '';
     
     return (
-      <div className="min-h-screen relative">
-        <section className="relative left-1/2 right-1/2 w-screen -translate-x-1/2">
+      <div className="min-h-screen relative overflow-x-hidden">
+        <section className="relative w-full">
           <Image
             src="https://22527425.fs1.hubspotusercontent-na2.net/hubfs/22527425/RSM/Frame%201171276000.png"
             alt="RSM Header"
@@ -978,8 +978,8 @@ export function CybersecurityAssessmentForm() {
 
   if (currentQuestion === 0) {
     return (
-      <div className="min-h-screen relative">
-        <section className="relative left-1/2 right-1/2 w-screen -translate-x-1/2">
+      <div className="min-h-screen relative overflow-x-hidden">
+        <section className="relative w-full">
           <Image
             src="https://22527425.fs1.hubspotusercontent-na2.net/hubfs/22527425/RSM/Frame%201171276000.png"
             alt="RSM Header"
@@ -1184,8 +1184,8 @@ export function CybersecurityAssessmentForm() {
   }
 
   return (
-      <div className="min-h-screen relative">
-      <section className="relative left-1/2 right-1/2 w-screen -translate-x-1/2">
+      <div className="min-h-screen relative overflow-x-hidden">
+      <section className="relative w-full">
         <Image
           src="https://22527425.fs1.hubspotusercontent-na2.net/hubfs/22527425/RSM/Frame%201171276000.png"
           alt="RSM Header"
