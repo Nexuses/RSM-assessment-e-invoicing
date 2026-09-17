@@ -31,12 +31,12 @@ export const INVOICE_VOLUME_BAND_OPTIONS = [
 
 /** Extended volume bands for entity details (q9_entities) dropdowns. */
 export const ENTITY_INVOICE_VOLUME_BAND_OPTIONS = [
-  { value: '0_1k', label: '0 to 1,000' },
+  { value: '0_1k', label: '0–1k' },
   { value: '1_3k', label: '1–3k' },
   { value: '3_5k', label: '3–5k' },
   { value: '5_7k', label: '5–7k' },
   { value: '7_10k', label: '7–10k' },
-  { value: 'above_10k', label: 'Above 10,000' },
+  { value: 'above_10k', label: 'Above 10k' },
 ] as const;
 
 const ENTITY_INVOICE_VOLUME_VALUES = new Set<string>(
