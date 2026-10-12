@@ -336,7 +336,15 @@ sudo certbot renew --dry-run
 
 
 
-## 12. Later updates
+## 12. Database backups
+
+Weekly `pg_dump` of `rsm_assessments` to the private S3 bucket `rsm-e-invoicing-db-backups`, run by `RSMae`'s crontab on Sunday at 02:00 server time. The other assessment apps on this VPS back up their own databases at 02:15 and 02:30, so dumps from the shared Postgres container never overlap. Setup, verification and restore: **[docs/DB_BACKUPS.md](docs/DB_BACKUPS.md)**.
+
+---
+
+
+
+## 13. Later updates
 
 Uses the same deploy key; no extra GitHub auth.
 
