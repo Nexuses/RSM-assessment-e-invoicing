@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { SubmissionAttachment } from "@/lib/submission-attachments";
+import { withBasePath } from "@/lib/base-path";
 
 type Props = {
   open: boolean;
@@ -63,7 +64,7 @@ export function AttachmentViewer({
 
       try {
         const response = await fetch(
-          `/api/submissions/signed-url?submissionId=${encodeURIComponent(submissionId)}`,
+          withBasePath(`/api/submissions/signed-url?submissionId=${encodeURIComponent(submissionId)}`),
         );
         const data = await response.json().catch(() => ({}));
 

@@ -22,7 +22,7 @@ module.exports = {
       cron_restart: "*/5 * * * *",
       env: {
         NODE_ENV: "production",
-        CRON_BASE_URL: "http://127.0.0.1:3000",
+        CRON_BASE_URL: "http://127.0.0.1:3000/einvoicing-assessment",
       },
     },
   ],

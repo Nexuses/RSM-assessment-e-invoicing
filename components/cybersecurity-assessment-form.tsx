@@ -75,6 +75,7 @@ import {
   getCountryDropdownOptions,
 } from "@/lib/country-options";
 import { ThemedMultiSelect, ThemedSelect } from "@/components/themed-select";
+import { withBasePath } from "@/lib/base-path";
 
 // Add this near the top of the file, before the component
 const BLOCKED_EMAIL_DOMAINS = [
@@ -153,7 +154,7 @@ export function CybersecurityAssessmentForm() {
     website: string;
   }) => {
     try {
-      const response = await fetch("/api/assessment-progress", {
+      const response = await fetch(withBasePath("/api/assessment-progress"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ personalInfo: info }),
@@ -186,7 +187,7 @@ export function CybersecurityAssessmentForm() {
 
       const run = async () => {
         try {
-          await fetch("/api/assessment-progress", {
+          await fetch(withBasePath("/api/assessment-progress"), {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ draftId: id, ...payload }),
@@ -243,7 +244,7 @@ export function CybersecurityAssessmentForm() {
       };
 
       try {
-        const response = await fetch("/api/send-assessment", {
+        const response = await fetch(withBasePath("/api/send-assessment"), {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -739,7 +740,7 @@ export function CybersecurityAssessmentForm() {
     setConsultationError(null);
     setIsSubmittingConsultation(true);
     try {
-      const response = await fetch("/api/book-consultation", {
+      const response = await fetch(withBasePath("/api/book-consultation"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

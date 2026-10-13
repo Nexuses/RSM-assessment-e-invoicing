@@ -131,7 +131,7 @@ Fill every required key:
 | `GOOGLE_SHEETS_SPREADSHEET_ID`                                                       | Spreadsheet ID (Sheet1 = assessments, Sheet2 = consultations) |
 | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` / `AWS_S3_BUCKET_NAME` / `AWS_REGION`  | PDF uploads                                                   |
 | `FROM_EMAIL` / `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` / `SMTP_SECURE` | Outbound email                                                |
-| `NEXT_PUBLIC_APP_URL`                                                                | Public site URL used in incomplete-assessment resume emails   |
+| `NEXT_PUBLIC_APP_URL`                                                                | Public URL in resume emails: `https://hub.rsm.ae/einvoicing-assessment` |
 | `CRON_SECRET`                                                                        | Bearer secret for `/api/cron/incomplete-assessments`          |
 
 
@@ -285,22 +285,27 @@ The app listens on `127.0.0.1:3000`. Secrets stay in `.env`; Next.js loads that 
 
 
 
-## 9. nginx
+## 9. nginx (path on hub.rsm.ae)
+
+Public URL: **`https://hub.rsm.ae/einvoicing-assessment`**. Every assessment on this VPS is a path on the one host `hub.rsm.ae`; see [SHARED-INFRA.md](SHARED-INFRA.md). The path is `basePath` in `next.config.js` and must match the nginx `location` exactly. Locally the app is also served under it (`http://localhost:3000/einvoicing-assessment`); plain `/` returns 404.
+
+Shared `hub.rsm.ae` server block, once per VPS (skip if `/etc/nginx/sites-enabled/hub.rsm.ae` exists):
 
 ```bash
-sudo cp /var/www/RSM-assessment-e-invoicing/deploy/nginx.conf.example /etc/nginx/sites-available/rsm-e-invoicing
-sudo nano /etc/nginx/sites-available/rsm-e-invoicing   # replace YOUR_DOMAIN
-sudo ln -s /etc/nginx/sites-available/rsm-e-invoicing /etc/nginx/sites-enabled/
-sudo nginx -t
-sudo systemctl reload nginx
-```
-
-If Ubuntu still has the default site and it conflicts, disable it:
-
-```bash
-sudo rm -f /etc/nginx/sites-enabled/default
+sudo mkdir -p /etc/nginx/hub.rsm.ae.d
+sudo cp /var/www/RSM-assessment-e-invoicing/deploy/hub.rsm.ae.conf.example /etc/nginx/sites-available/hub.rsm.ae
+sudo ln -s /etc/nginx/sites-available/hub.rsm.ae /etc/nginx/sites-enabled/hub.rsm.ae
 sudo nginx -t && sudo systemctl reload nginx
 ```
+
+This app's location snippet:
+
+```bash
+sudo cp /var/www/RSM-assessment-e-invoicing/deploy/nginx.conf.example /etc/nginx/hub.rsm.ae.d/einvoicing-assessment.conf
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+The old address `einvoicing-assessment.rsm.ae` redirects to the hub path and still proxies `/api/` for pages loaded before the switch: [`deploy/legacy-subdomain.conf.example`](deploy/legacy-subdomain.conf.example).
 
 ---
 
@@ -308,15 +313,10 @@ sudo nginx -t && sudo systemctl reload nginx
 
 ## 10. HTTPS
 
-DNS must already point at this server.
+Only needed once for the hub, not per assessment. DNS for `hub.rsm.ae` must point at this server.
 
 ```bash
-sudo certbot --nginx -d YOUR_DOMAIN -d www.YOUR_DOMAIN
-```
-
-Certbot rewrites the server block for port 443 and sets up auto-renewal. Test:
-
-```bash
+sudo certbot --nginx -d hub.rsm.ae
 sudo certbot renew --dry-run
 ```
 
@@ -326,11 +326,12 @@ sudo certbot renew --dry-run
 
 ## 11. Smoke test
 
-1. Open `https://YOUR_DOMAIN`
-2. Submit a test assessment — Postgres row, user email with PDF, internal email, Sheet1 row, S3 object
-3. Submit a test consultation — Postgres row, confirmation email, admin email, Sheet2 row
-4. Open `https://YOUR_DOMAIN/submissions` and confirm the shared password gate works, the assessment appears in the first tab, and the consultation appears in the second tab
-5. If anything fails: `pm2 logs rsm-e-invoicing`
+1. `curl -I http://127.0.0.1:3000/einvoicing-assessment` → `200`
+2. Open `https://hub.rsm.ae/einvoicing-assessment`
+3. Submit a test assessment — Postgres row, user email with PDF, internal email, Sheet1 row, S3 object
+4. Submit a test consultation — Postgres row, confirmation email, admin email, Sheet2 row
+5. Open `https://hub.rsm.ae/einvoicing-assessment/submissions` and confirm the shared password gate works, the assessment appears in the first tab, and the consultation appears in the second tab
+6. If anything fails: `pm2 logs rsm-e-invoicing`
 
 ---
 
