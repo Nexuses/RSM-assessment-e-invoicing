@@ -32,7 +32,7 @@ loadEnvFile(path.join(__dirname, "..", ".env"));
 loadEnvFile(path.join(__dirname, "..", ".env.local"));
 
 const secret = process.env.CRON_SECRET;
-const base = (process.env.CRON_BASE_URL || "http://127.0.0.1:3000").replace(
+const base = (process.env.CRON_BASE_URL || "http://127.0.0.1:3000/einvoicing-assessment").replace(
   /\/$/,
   "",
 );

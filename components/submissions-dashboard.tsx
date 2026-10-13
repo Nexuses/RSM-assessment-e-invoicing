@@ -13,6 +13,7 @@ import {
 } from "@/components/submissions/submissions-toolbar";
 import { SubmissionsPageHeader } from "@/components/submissions/submissions-page-header";
 import { getSubmissionAttachments } from "@/lib/submission-attachments";
+import { withBasePath } from "@/lib/base-path";
 import {
   filterAssessments,
   getDistinctCategories,
@@ -98,7 +99,7 @@ export function SubmissionsDashboard({ isConfigured, initialAuthenticated }: Pro
     setError(null);
 
     try {
-      const response = await fetch("/api/submissions");
+      const response = await fetch(withBasePath("/api/submissions"));
       const data = await response.json().catch(() => ({}));
 
       if (!response.ok) {
@@ -123,7 +124,7 @@ export function SubmissionsDashboard({ isConfigured, initialAuthenticated }: Pro
     setLoading(true);
 
     try {
-      const response = await fetch("/api/submissions/login", {
+      const response = await fetch(withBasePath("/api/submissions/login"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ password }),
@@ -144,7 +145,7 @@ export function SubmissionsDashboard({ isConfigured, initialAuthenticated }: Pro
   }
 
   async function handleLogout() {
-    await fetch("/api/submissions/logout", { method: "POST" });
+    await fetch(withBasePath("/api/submissions/logout"), { method: "POST" });
     setAuthenticated(false);
     setExpandedId(null);
     setSubmissions({ assessments: [] });
@@ -160,7 +161,7 @@ export function SubmissionsDashboard({ isConfigured, initialAuthenticated }: Pro
     setError(null);
 
     try {
-      const response = await fetch("/api/submissions/export");
+      const response = await fetch(withBasePath("/api/submissions/export"));
 
       if (!response.ok) {
         const data = await response.json().catch(() => ({}));
